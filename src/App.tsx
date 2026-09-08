@@ -39,11 +39,16 @@ interface Meeting {
   agendaItems: AgendaItem[];
 }
 
-interface ApiResponse {
+interface ApiResponse<T> {
   success: boolean;
   error?: string;
   code?: string;
   warnings?: string[];
+  warning?: string;
+  meeting?: T;
+  meetings?: T;
+  committee?: T;
+  committees?: T;
   [key: string]: unknown;
 }
 
