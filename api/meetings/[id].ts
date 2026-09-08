@@ -1,11 +1,30 @@
-import { getAuthenticatedUser } from "../_lib/auth";
+import { db } from "../_lib/db";
+import { requireAuth } from "../_lib/auth";
+import { canViewCommittee } from "../_lib/permissions";
+import {
+  CalendarNotConfiguredError,
+  deleteCalendarEvent,
+  getCalendarEvent,
+  restoreCalendarEvent,
+  updateCalendarEvent,
+} from "../_lib/calendar";
 import { writeAuditEvent } from "../_lib/audit";
-import { updateCalendarEvent, deleteCalendarEvent, CalendarNotConfiguredError } from "../_lib/calendar";
-import { getDb } from "../_lib/db";
-import { error, json, readJson } from "../_lib/http";
-import { isZohoMailConfigured, sendMeetingNotification } from "../_lib/email";
+import { sendMeetingNotification } from "../_lib/email";
+import {
+  badRequest,
+  forbidden,
+  json,
+  notFound,
+  serverError,
+  serviceUnavailable,
+} from "../_lib/http";
 
-interface MeetingUpdateInput {
+type AgendaInput = {
+  title?: unknown;
+  description?: unknown;
+};
+
+type MeetingPatchInput = {
   title?: unknown;
   description?: unknown;
   startAt?: unknown;
@@ -13,132 +32,251 @@ interface MeetingUpdateInput {
   timezone?: unknown;
   location?: unknown;
   agendaItems?: unknown;
-}
+};
 
-function meetingId(request: Request): string | undefined {
-  const segments = new URL(request.url).pathname.split("/").filter(Boolean);
-  const meetingsIndex = segments.indexOf("meetings");
-  const id = meetingsIndex >= 0 ? segments[meetingsIndex + 1] : undefined;
-  return id && id !== "[id]" ? decodeURIComponent(id) : undefined;
-}
-
-function requiredString(value: unknown, field: string): string {
-  if (typeof value !== "string" || !value.trim()) {
-    throw new Error(`${field} is required.`);
+function asOptionalString(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
   }
-  return value.trim();
+
+  return typeof value === "string" ? value.trim() : undefined;
 }
 
-function optionalString(value: unknown): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string") throw new Error("Expected a string value.");
-  return value.trim();
-}
-
-function parseDate(value: unknown, field: string): Date {
-  const date = new Date(requiredString(value, field));
-  if (Number.isNaN(date.getTime())) throw new Error(`${field} must be a valid ISO date/time.`);
-  return date;
-}
-
-function parseAgenda(value: unknown): Array<{ position: number; title: string; description?: string }> {
-  if (!Array.isArray(value) || value.length === 0) {
+function validateAgendaItems(value: unknown) {
+  if (!Array.isArray(value) || value.length < 1) {
     throw new Error("At least one agenda item is required.");
   }
 
-  return value.map((item, index) => {
-    const candidate = item as { title?: unknown; description?: unknown };
+  return value.map((item: AgendaInput, index) => {
+    const title = typeof item?.title === "string" ? item.title.trim() : "";
+    const description =
+      typeof item?.description === "string"
+        ? item.description.trim()
+        : undefined;
+
+    if (!title) {
+      throw new Error(`Agenda item ${index + 1} requires a title.`);
+    }
+
     return {
       position: index + 1,
-      title: requiredString(candidate?.title, `Agenda item ${index + 1} title`),
-      description: optionalString(candidate?.description),
+      title,
+      description: description || null,
     };
   });
 }
 
-async function getMeeting(id: string) {
-  return getDb().meeting.findUnique({
-    where: { id },
-    include: {
-      committee: {
-        include: {
-          memberships: {
-            where: {
-              startDate: { lte: new Date() },
-              OR: [{ endDate: null }, { endDate: { gte: new Date() } }],
-              user: { isActive: true },
-            },
-            include: { user: { select: { email: true, name: true } } },
-          },
-        },
-      },
-      agendaItems: { orderBy: { position: "asc" } },
-    },
-  });
-}
-
-async function view(request: Request, id: string) {
-  const context = await getAuthenticatedUser(request);
-  if (!context) return error("Authentication required.", 401);
-
-  const meeting = await getMeeting(id);
-  if (!meeting) return error("Meeting not found.", 404);
-
-  if (context.user.role === "MEMBER") {
-    const now = new Date();
-    const membership = await getDb().membership.findFirst({
-      where: {
-        userId: context.user.id,
-        committeeId: meeting.committeeId,
-        startDate: { lte: now },
-        OR: [{ endDate: null }, { endDate: { gte: now } }],
-      },
-    });
-    if (!membership) return error("You do not have access to this meeting.", 403);
+function parseDate(value: unknown, field: string): Date | undefined {
+  if (value === undefined) {
+    return undefined;
   }
 
-  return json({ success: true, meeting });
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${field} must be a valid ISO date.`);
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    throw new Error(`${field} must be a valid ISO date.`);
+  }
+
+  return date;
 }
 
-async function update(request: Request, id: string) {
-  const context = await getAuthenticatedUser(request);
-  if (!context) return error("Authentication required.", 401);
-  if (context.user.role !== "ADMIN") return error("Administrator access required.", 403);
+function getId(request: Request): string | null {
+  const pathname = new URL(request.url).pathname;
+  const parts = pathname.split("/").filter(Boolean);
+  const id = parts.at(-1);
 
-  const meeting = await getMeeting(id);
-  if (!meeting) return error("Meeting not found.", 404);
-  if (meeting.status === "CANCELLED") return error("Cancelled meetings cannot be edited.", 409);
-  if (!meeting.zohoEventUid || !meeting.committee.zohoCalendarId) {
-    return error("Meeting is missing its Zoho Calendar reference.", 409);
+  return id && id !== "meetings" ? id : null;
+}
+
+export async function GET(request: Request) {
+  const context = await requireAuth(request);
+
+  const id = getId(request);
+
+  if (!id) {
+    return badRequest("Meeting ID is required.");
+  }
+
+  const meeting = await db.meeting.findUnique({
+    where: { id },
+    include: {
+      committee: true,
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      cancelledBy: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
+      agendaItems: {
+        orderBy: {
+          position: "asc",
+        },
+      },
+    },
+  });
+
+  if (!meeting) {
+    return notFound("Meeting not found.");
+  }
+
+  const allowed = await canViewCommittee(context, meeting.committeeId);
+
+  if (!allowed) {
+    return forbidden();
+  }
+
+  return json({ meeting });
+}
+
+export async function PATCH(request: Request) {
+  const context = await requireAuth(request);
+
+  if (context.user.role !== "ADMIN") {
+    return forbidden();
+  }
+
+  const id = getId(request);
+
+  if (!id) {
+    return badRequest("Meeting ID is required.");
+  }
+
+  let body: MeetingPatchInput;
+
+  try {
+    body = (await request.json()) as MeetingPatchInput;
+  } catch {
+    return badRequest("Invalid JSON body.");
+  }
+
+  const meeting = await db.meeting.findUnique({
+    where: { id },
+    include: {
+      committee: true,
+    },
+  });
+
+  if (!meeting) {
+    return notFound("Meeting not found.");
+  }
+
+  if (meeting.status !== "SCHEDULED") {
+    return badRequest("Only scheduled meetings can be edited.");
+  }
+
+  if (!meeting.zohoEventUid || !meeting.committee.zohoCalendarUid) {
+    return serviceUnavailable(
+      "This meeting is missing its Zoho Calendar event reference.",
+    );
+  }
+
+  const title =
+    body.title === undefined
+      ? meeting.title
+      : asOptionalString(body.title);
+
+  const description =
+    body.description === undefined
+      ? meeting.description
+      : asOptionalString(body.description) || null;
+
+  const startAt = parseDate(body.startAt, "startAt") ?? meeting.startAt;
+  const endAt = parseDate(body.endAt, "endAt") ?? meeting.endAt;
+
+  const timezone =
+    body.timezone === undefined
+      ? meeting.timezone
+      : asOptionalString(body.timezone);
+
+  const location =
+    body.location === undefined
+      ? meeting.location
+      : asOptionalString(body.location);
+
+  if (!title) {
+    return badRequest("Title is required.");
+  }
+
+  if (!timezone) {
+    return badRequest("Timezone is required.");
+  }
+
+  if (!location) {
+    return badRequest("Location is required.");
+  }
+
+  if (endAt <= startAt) {
+    return badRequest("End time must be after start time.");
+  }
+
+  let agendaItems;
+
+  try {
+    agendaItems =
+      body.agendaItems === undefined
+        ? null
+        : validateAgendaItems(body.agendaItems);
+  } catch (error) {
+    return badRequest(
+      error instanceof Error ? error.message : "Invalid agenda.",
+    );
   }
 
   try {
-    const body = await readJson<MeetingUpdateInput>(request);
-    const title = requiredString(body.title, "title");
-    const description = optionalString(body.description);
-    const startAt = parseDate(body.startAt, "startAt");
-    const endAt = parseDate(body.endAt, "endAt");
-    const timezone = optionalString(body.timezone) ?? meeting.timezone;
-    const location = requiredString(body.location, "location");
-    const agendaItems = parseAgenda(body.agendaItems);
+    /*
+     * Zoho PUT replaces the event resource. Therefore obtain the complete
+     * provider snapshot before changing anything so that a DB failure can
+     * restore the provider state exactly rather than reconstructing it from
+     * application data.
+     */
+    const providerSnapshot = await getCalendarEvent(
+      meeting.committee.zohoCalendarUid,
+      meeting.zohoEventUid,
+    );
 
-    if (endAt <= startAt) throw new Error("endAt must be later than startAt.");
-
-    await updateCalendarEvent({
-      calendarId: meeting.committee.zohoCalendarId,
-      eventUid: meeting.zohoEventUid,
-      title,
-      description,
-      startAt,
-      endAt,
-      timezone,
-      location,
-      attendees: meeting.committee.memberships.map(({ user }) => ({ email: user.email })),
-    });
+    const updatedProviderEvent = await updateCalendarEvent(
+      meeting.committee.zohoCalendarUid,
+      meeting.zohoEventUid,
+      {
+        title,
+        description: description ?? undefined,
+        startAt,
+        endAt,
+        timezone,
+        location,
+      },
+      providerSnapshot.etag,
+    );
 
     try {
-      const updated = await getDb().$transaction(async (tx) => {
-        await tx.agendaItem.deleteMany({ where: { meetingId: meeting.id } });
+      const updatedMeeting = await db.$transaction(async (tx) => {
+        if (agendaItems) {
+          await tx.agendaItem.deleteMany({
+            where: { meetingId: meeting.id },
+          });
+
+          await tx.agendaItem.createMany({
+            data: agendaItems.map((item) => ({
+              meetingId: meeting.id,
+              position: item.position,
+              title: item.title,
+              description: item.description,
+            })),
+          });
+        }
+
         return tx.meeting.update({
           where: { id: meeting.id },
           data: {
@@ -148,146 +286,354 @@ async function update(request: Request, id: string) {
             endAt,
             timezone,
             location,
-            agendaItems: { create: agendaItems },
           },
           include: {
-            committee: { select: { id: true, name: true, slug: true, type: true } },
-            agendaItems: { orderBy: { position: "asc" } },
+            committee: true,
+            createdBy: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            agendaItems: {
+              orderBy: {
+                position: "asc",
+              },
+            },
           },
         });
       });
 
-      await writeAuditEvent({
-        request,
-        context,
-        action: "MEETING_UPDATED",
-        entityType: "Meeting",
-        entityId: meeting.id,
-        metadata: { committeeId: meeting.committeeId, zohoEventUid: meeting.zohoEventUid },
-      });
+      let warning: string | undefined;
 
-      const warnings: string[] = [];
-      if (isZohoMailConfigured()) {
-        try {
-          await sendMeetingNotification(meeting.committee.memberships.map(({ user }) => user), {
-            type: "updated",
+      try {
+        await writeAuditEvent({
+          request,
+          context,
+          action: "MEETING_UPDATED",
+          entityType: "Meeting",
+          entityId: meeting.id,
+          metadata: {
             title,
-            committeeName: meeting.committee.name,
-            startAt,
-            endAt,
-            timezone,
-            location,
-            meetingId: meeting.id,
-          });
-        } catch {
-          warnings.push("Meeting update email notification could not be delivered.");
-        }
-      } else {
-        warnings.push("Zoho Mail is not configured; meeting update email notification was skipped.");
+            startAt: startAt.toISOString(),
+            endAt: endAt.toISOString(),
+          },
+        });
+      } catch (auditError) {
+        console.error("Meeting update audit failed:", auditError);
+        warning =
+          "The meeting was updated successfully, but the audit record could not be written.";
       }
 
-      return json({ success: true, meeting: updated, warnings });
-    } catch (databaseError) {
-      await updateCalendarEvent({
-        calendarId: meeting.committee.zohoCalendarId,
-        eventUid: meeting.zohoEventUid,
-        title: meeting.title,
-        description: meeting.description ?? undefined,
-        startAt: meeting.startAt,
-        endAt: meeting.endAt,
-        timezone: meeting.timezone,
-        location: meeting.location,
-        attendees: meeting.committee.memberships.map(({ user }) => ({ email: user.email })),
-      }).catch(() => undefined);
-      throw databaseError;
+      try {
+        await sendMeetingNotification({
+          type: "UPDATED",
+          meetingId: meeting.id,
+          title: updatedMeeting.title,
+          startAt: updatedMeeting.startAt,
+          endAt: updatedMeeting.endAt,
+          timezone: updatedMeeting.timezone,
+          location: updatedMeeting.location,
+        });
+      } catch (mailError) {
+        console.warn("Meeting update notification failed:", mailError);
+        warning =
+          warning ??
+          "The meeting was updated successfully, but the email notification could not be sent.";
+      }
+
+      return json({
+        meeting: updatedMeeting,
+        providerEventUid:
+          updatedProviderEvent.uid ?? meeting.zohoEventUid,
+        ...(warning ? { warning } : {}),
+      });
+    } catch (dbError) {
+      console.error("Meeting DB update failed; restoring Zoho event:", dbError);
+
+      try {
+        await restoreCalendarEvent(
+          meeting.committee.zohoCalendarUid,
+          meeting.zohoEventUid,
+          providerSnapshot,
+        );
+      } catch (restoreError) {
+        console.error(
+          "CRITICAL: Zoho event restoration failed:",
+          restoreError,
+        );
+
+        try {
+          await writeAuditEvent({
+            request,
+            context,
+            action: "MEETING_UPDATE_RECOVERY_FAILED",
+            entityType: "Meeting",
+            entityId: meeting.id,
+            metadata: {
+              reason: "database_update_failed_and_provider_restore_failed",
+              providerEventUid: meeting.zohoEventUid,
+            },
+          });
+        } catch (auditError) {
+          console.error(
+            "Recovery-failure audit could not be written:",
+            auditError,
+          );
+        }
+
+        return serverError(
+          "The meeting update could not be persisted and the Zoho Calendar event could not be restored. Manual recovery is required.",
+        );
+      }
+
+      return serverError(
+        "The meeting update could not be persisted. The Zoho Calendar event was restored.",
+      );
     }
-  } catch (caught) {
-    if (caught instanceof CalendarNotConfiguredError) {
-      return error(caught.message, 503, "CALENDAR_NOT_CONFIGURED");
+  } catch (error) {
+    if (error instanceof CalendarNotConfiguredError) {
+      return serviceUnavailable("Zoho Calendar is not configured.");
     }
-    if (caught instanceof Error) return error(caught.message, 400);
-    return error("Unable to update meeting.", 500);
+
+    console.error("Meeting update failed:", error);
+    return serverError("Unable to update meeting.");
   }
 }
 
-async function cancel(request: Request, id: string) {
-  const context = await getAuthenticatedUser(request);
-  if (!context) return error("Authentication required.", 401);
-  if (context.user.role !== "ADMIN") return error("Administrator access required.", 403);
+export async function DELETE(request: Request) {
+  const context = await requireAuth(request);
 
-  const meeting = await getMeeting(id);
-  if (!meeting) return error("Meeting not found.", 404);
-  if (meeting.status === "CANCELLED") return error("Meeting is already cancelled.", 409);
-  if (!meeting.zohoEventUid || !meeting.committee.zohoCalendarId) {
-    return error("Meeting is missing its Zoho Calendar reference.", 409);
+  if (context.user.role !== "ADMIN") {
+    return forbidden();
+  }
+
+  const id = getId(request);
+
+  if (!id) {
+    return badRequest("Meeting ID is required.");
+  }
+
+  const meeting = await db.meeting.findUnique({
+    where: { id },
+    include: {
+      committee: true,
+    },
+  });
+
+  if (!meeting) {
+    return notFound("Meeting not found.");
+  }
+
+  if (meeting.status === "CANCELLED") {
+    return badRequest("Meeting is already cancelled.");
+  }
+
+  if (!meeting.zohoEventUid || !meeting.committee.zohoCalendarUid) {
+    return serviceUnavailable(
+      "This meeting is missing its Zoho Calendar event reference.",
+    );
   }
 
   try {
-    await deleteCalendarEvent(meeting.committee.zohoCalendarId, meeting.zohoEventUid);
+    /*
+     * Keep the complete provider event before deleting it. The schema does not
+     * currently contain a PENDING_CANCEL state, so if DB persistence fails
+     * after the external deletion, the only safe compensation is recreation.
+     */
+    const providerSnapshot = await getCalendarEvent(
+      meeting.committee.zohoCalendarUid,
+      meeting.zohoEventUid,
+    );
 
-    const cancelled = await getDb().meeting.update({
-      where: { id: meeting.id },
-      data: {
-        status: "CANCELLED",
-        cancelledAt: new Date(),
-        cancelledById: context.user.id,
-      },
-      include: {
-        committee: { select: { id: true, name: true, slug: true, type: true } },
-        agendaItems: { orderBy: { position: "asc" } },
-      },
-    });
+    await deleteCalendarEvent(
+      meeting.committee.zohoCalendarUid,
+      meeting.zohoEventUid,
+      providerSnapshot.etag,
+    );
 
-    await writeAuditEvent({
-      request,
-      context,
-      action: "MEETING_CANCELLED",
-      entityType: "Meeting",
-      entityId: meeting.id,
-      metadata: { committeeId: meeting.committeeId, zohoEventUid: meeting.zohoEventUid },
-    });
+    try {
+      const cancelledMeeting = await db.meeting.update({
+        where: {
+          id: meeting.id,
+        },
+        data: {
+          status: "CANCELLED",
+          cancelledAt: new Date(),
+          cancelledById: context.user.id,
+        },
+        include: {
+          committee: true,
+          cancelledBy: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      });
 
-    const warnings: string[] = [];
-    if (isZohoMailConfigured()) {
+      let warning: string | undefined;
+
       try {
-        await sendMeetingNotification(meeting.committee.memberships.map(({ user }) => user), {
-          type: "cancelled",
+        await writeAuditEvent({
+          request,
+          context,
+          action: "MEETING_CANCELLED",
+          entityType: "Meeting",
+          entityId: meeting.id,
+          metadata: {
+            title: meeting.title,
+            zohoEventUid: meeting.zohoEventUid,
+          },
+        });
+      } catch (auditError) {
+        console.error("Meeting cancellation audit failed:", auditError);
+        warning =
+          "The meeting was cancelled successfully, but the audit record could not be written.";
+      }
+
+      try {
+        await sendMeetingNotification({
+          type: "CANCELLED",
+          meetingId: meeting.id,
           title: meeting.title,
-          committeeName: meeting.committee.name,
           startAt: meeting.startAt,
           endAt: meeting.endAt,
           timezone: meeting.timezone,
           location: meeting.location,
-          meetingId: meeting.id,
         });
-      } catch {
-        warnings.push("Meeting cancellation email notification could not be delivered.");
+      } catch (mailError) {
+        console.warn("Meeting cancellation notification failed:", mailError);
+        warning =
+          warning ??
+          "The meeting was cancelled successfully, but the email notification could not be sent.";
       }
-    } else {
-      warnings.push("Zoho Mail is not configured; meeting cancellation email notification was skipped.");
+
+      return json({
+        meeting: cancelledMeeting,
+        ...(warning ? { warning } : {}),
+      });
+    } catch (dbError) {
+      console.error(
+        "CRITICAL: Meeting cancellation DB update failed after Zoho deletion:",
+        dbError,
+      );
+
+      try {
+        const recreated = await restoreCalendarEvent(
+          meeting.committee.zohoCalendarUid,
+          null,
+          providerSnapshot,
+        );
+
+        const recreatedUid = recreated.uid;
+
+        if (!recreatedUid) {
+          throw new Error(
+            "Zoho recreation succeeded without returning an event UID.",
+          );
+        }
+
+        try {
+          await db.meeting.update({
+            where: { id: meeting.id },
+            data: {
+              zohoEventUid: recreatedUid,
+            },
+          });
+        } catch (repairError) {
+          console.error(
+            "CRITICAL: Recreated Zoho event could not be linked back to meeting:",
+            repairError,
+          );
+
+          try {
+            await writeAuditEvent({
+              request,
+              context,
+              action: "MEETING_CANCEL_RECOVERY_FAILED",
+              entityType: "Meeting",
+              entityId: meeting.id,
+              metadata: {
+                reason:
+                  "database_cancellation_failed_and_provider_recreation_link_failed",
+                recreatedZohoEventUid: recreatedUid,
+              },
+            });
+          } catch (auditError) {
+            console.error(
+              "Cancellation recovery audit could not be written:",
+              auditError,
+            );
+          }
+
+          return serverError(
+            "The cancellation could not be persisted and the Zoho Calendar event was recreated but could not be linked back to the meeting. Manual recovery is required.",
+          );
+        }
+
+        try {
+          await writeAuditEvent({
+            request,
+            context,
+            action: "MEETING_CANCEL_ROLLBACK",
+            entityType: "Meeting",
+            entityId: meeting.id,
+            metadata: {
+              reason: "database_cancellation_failed",
+              recreatedZohoEventUid: recreatedUid,
+            },
+          });
+        } catch (auditError) {
+          console.error(
+            "Cancellation rollback audit could not be written:",
+            auditError,
+          );
+        }
+
+        return serverError(
+          "The meeting cancellation could not be persisted. The Zoho Calendar event was restored.",
+        );
+      } catch (restoreError) {
+        console.error(
+          "CRITICAL: Zoho Calendar recreation failed:",
+          restoreError,
+        );
+
+        try {
+          await writeAuditEvent({
+            request,
+            context,
+            action: "MEETING_CANCEL_RECOVERY_FAILED",
+            entityType: "Meeting",
+            entityId: meeting.id,
+            metadata: {
+              reason:
+                "database_cancellation_failed_and_provider_recreation_failed",
+              originalZohoEventUid: meeting.zohoEventUid,
+            },
+          });
+        } catch (auditError) {
+          console.error(
+            "Cancellation recovery-failure audit could not be written:",
+            auditError,
+          );
+        }
+
+        return serverError(
+          "The meeting cancellation could not be persisted and the Zoho Calendar event could not be restored. Manual recovery is required.",
+        );
+      }
+    }
+  } catch (error) {
+    if (error instanceof CalendarNotConfiguredError) {
+      return serviceUnavailable("Zoho Calendar is not configured.");
     }
 
-    return json({ success: true, meeting: cancelled, warnings });
-  } catch (caught) {
-    if (caught instanceof CalendarNotConfiguredError) {
-      return error(caught.message, 503, "CALENDAR_NOT_CONFIGURED");
-    }
-    console.error("Meeting cancellation failed.", caught);
-    return error("Unable to cancel meeting.", 500);
-  }
-}
-
-export default async function handler(request: Request): Promise<Response> {
-  const id = meetingId(request);
-  if (!id) return error("Meeting id is required.", 400);
-
-  try {
-    if (request.method === "GET") return await view(request, id);
-    if (request.method === "PATCH") return await update(request, id);
-    if (request.method === "DELETE") return await cancel(request, id);
-    return error("Method not allowed.", 405);
-  } catch (caught) {
-    console.error("Meeting item request failed.", caught);
-    return error("Unable to process meeting request.", 500);
+    console.error("Meeting cancellation failed:", error);
+    return serverError("Unable to cancel meeting.");
   }
 }
