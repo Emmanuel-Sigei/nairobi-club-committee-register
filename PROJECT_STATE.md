@@ -100,9 +100,13 @@
 - [x] Closed meetings lock attendance mutations except Admin corrections.
 - [x] Attendance and RSVP mutations refresh authoritative server state in the UI.
 - [x] Attendance mutation audit events implemented.
+- [x] Member meeting URLs resolve directly to the meeting detail surface, supporting the specified meeting-link self check-in flow.
+- [x] Self apologies can replace a Zoho-generated `APOLOGY_DRAFT`, preserving the in-app record as authoritative.
+- [x] Apology confirmation is sent through the existing Zoho Mail integration when configured.
 - [ ] Prisma migration for Stage 3 schema has not been executed.
 - [ ] Neon runtime validation has not been executed.
 - [ ] End-to-end attendance/Zoho integration validation has not been executed.
+- [ ] QR-code presentation/generation has not been added; the authenticated meeting-link check-in flow is implemented without introducing another dependency.
 
 ## Not Yet Executed
 
@@ -157,13 +161,15 @@ Required runtime integrations:
 - Zoho RSVP is treated as an external signal only. A Zoho decline creates a draft apology only when no application attendance record exists; application records always take precedence.
 - Zoho RSVP synchronization is strictly on-demand and uses a five-minute `lastSyncedAt` freshness gate. No Vercel Cron was added.
 - Attendance eligibility is based on membership dates at the meeting start, not current membership state, so historical committee participation remains auditable.
+- Stage 3 self check-in uses the authenticated meeting detail/link flow already present in the application rather than introducing a new QR dependency. QR presentation can be added later without changing the authoritative attendance API.
+- Self-submitted apologies may replace a Zoho-only apology draft; the application record remains authoritative.
 
 ## Gotchas
 
 - `DATABASE_URL` is required when API code actually accesses the database.
 - `DATABASE_URL` is not required for Prisma client generation.
-- Zoho Mail credentials must be populated before invitation, OTP, password-reset, or meeting notification email flows can operate.
-- Zoho Calendar credentials and a `zohoCalendarId` on the committee are required before meeting creation/update/cancellation can synchronize with Zoho.
+- Zoho Mail credentials must be populated before invitation, OTP, password-reset, meeting notification or apology confirmation email flows can operate.
+- Zoho Calendar credentials and a `zohoCalendarId` on the committee are required before meeting creation/update/cancellation or RSVP synchronization can synchronize with Zoho.
 - `src/generated/prisma` is generated during the build and is excluded from Git.
 - Never expose raw invitation, reset or OTP tokens through API responses.
 - Stage 3 schema changes require a Prisma migration before runtime attendance operations can be used against Neon.
