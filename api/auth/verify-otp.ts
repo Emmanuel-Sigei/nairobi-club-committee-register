@@ -160,7 +160,7 @@ export default async function handler(
     now.getTime() + SESSION_DAYS * 24 * 60 * 60_000,
   );
 
-  const session = await db.$transaction(async (tx) => {
+  await db.$transaction(async (tx) => {
     await tx.otpChallenge.update({
       where: {
         id: challenge.id,

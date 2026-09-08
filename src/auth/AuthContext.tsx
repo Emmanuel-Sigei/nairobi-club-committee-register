@@ -54,6 +54,8 @@ export function AuthProvider({
   }, []);
 
   useEffect(() => {
+    // Authentication bootstrap intentionally updates state after the API request.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshUser();
   }, [refreshUser]);
 
@@ -79,6 +81,9 @@ export function AuthProvider({
   );
 }
 
+// AuthProvider and useAuth are intentionally colocated because the hook consumes
+// the context created by this provider.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): AuthContextValue {
   const context = useContext(AuthContext);
 
