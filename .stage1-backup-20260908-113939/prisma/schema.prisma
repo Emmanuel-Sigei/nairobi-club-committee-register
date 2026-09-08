@@ -1,0 +1,178 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  MEMBER
+  ADMIN
+  EXCO_MANAGEMENT
+}
+
+enum CommitteeType {
+  MAIN
+  SUBCOMMITTEE
+}
+
+enum MembershipRole {
+  CHAIR
+  SECRETARY
+  MEMBER
+}
+
+enum OtpPurpose {
+  LOGIN
+}
+
+enum TokenPurpose {
+  INVITATION
+  PASSWORD_RESET
+}
+
+enum AuditActorType {
+  USER
+  SYSTEM
+}
+
+model User {
+  id                 String          @id @default(cuid())
+  email              String          @unique
+  name               String
+  passwordHash       String?
+  role               UserRole        @default(MEMBER)
+  isActive           Boolean         @default(true)
+  invitedAt          DateTime?
+  passwordSetAt      DateTime?
+  deactivatedAt      DateTime?
+  otpLockedUntil     DateTime?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  memberships        Membership[]
+  sessions           Session[]
+  otpChallenges      OtpChallenge[]
+  oneTimeTokens      OneTimeToken[]
+  auditEvents        AuditEvent[]    @relation("AuditActor")
+
+  @@index([role])
+  @@index([isActive])
+}
+
+model Committee {
+  id               String        @id @default(cuid())
+  name             String
+  slug             String        @unique
+  type             CommitteeType
+  parentId         String?
+
+  parent           Committee?    @relation("CommitteeHierarchy", fields: [parentId], references: [id])
+  subcommittees    Committee[]   @relation("CommitteeHierarchy")
+
+  zohoCalendarId   String?
+  archivedAt       DateTime?
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  memberships      Membership[]
+
+  @@index([type])
+  @@index([parentId])
+  @@index([archivedAt])
+}
+
+model Membership {
+  id               String          @id @default(cuid())
+  userId           String
+  committeeId      String
+  role             MembershipRole  @default(MEMBER)
+  startDate        DateTime
+  endDate          DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user             User            @relation(fields: [userId], references: [id], onDelete: Restrict)
+  committee        Committee       @relation(fields: [committeeId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([committeeId])
+  @@index([userId, committeeId])
+  @@index([committeeId, startDate])
+  @@index([committeeId, endDate])
+}
+
+model Session {
+  id               String    @id @default(cuid())
+  userId           String
+  tokenHash        String    @unique
+  expiresAt        DateTime
+  lastSeenAt       DateTime?
+  revokedAt        DateTime?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime  @default(now())
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([revokedAt])
+}
+
+model OtpChallenge {
+  id               String      @id @default(cuid())
+  userId           String
+  purpose          OtpPurpose  @default(LOGIN)
+  codeHash         String
+  expiresAt        DateTime
+  attempts         Int         @default(0)
+  consumedAt       DateTime?
+  lastSentAt       DateTime
+  lockedUntil      DateTime?
+  createdAt        DateTime     @default(now())
+
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@index([consumedAt])
+}
+
+model OneTimeToken {
+  id               String        @id @default(cuid())
+  userId           String
+  purpose          TokenPurpose
+  tokenHash        String        @unique
+  expiresAt        DateTime
+  usedAt           DateTime?
+  createdAt        DateTime      @default(now())
+
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@index([usedAt])
+}
+
+model AuditEvent {
+  id               String          @id @default(cuid())
+  actorType        AuditActorType  @default(USER)
+  actorUserId      String?
+  action           String
+  entityType       String?
+  entityId         String?
+  metadata         Json?
+  ipAddress        String?
+  userAgent        String?
+  createdAt        DateTime        @default(now())
+
+  actor            User?           @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}

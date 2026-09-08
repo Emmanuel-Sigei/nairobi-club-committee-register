@@ -7,9 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies
 node_modules
+
+# Build output
 dist
 dist-ssr
+
+# Generated Prisma client
+src/generated/prisma
+
+# Local files
 *.local
 
 # Editor directories and files
