@@ -29,7 +29,7 @@
 12. Email OTP is the only MFA mechanism.
 13. Vercel Hobby is the current deployment target.
 
-## Stage 1 Hardening
+## Stage 1 Hardening — confirmed complete
 
 - [x] Prisma 7 schema converted to `prisma-client`.
 - [x] Prisma client uses explicit generated output.
@@ -62,10 +62,10 @@
 - [x] Frontend authentication context implemented.
 - [x] Frontend login and OTP flow implemented.
 
-## Stage 2 - Meetings and Zoho Calendar
+## Stage 2 - Meetings and Zoho Calendar — confirmed complete
 
 - [x] Meeting and agenda Prisma models added.
-- [x] Meeting statuses added (`SCHEDULED`, `CANCELLED`).
+- [x] Meeting statuses added (`SCHEDULED`, `CANCELLED`); Stage 3 subsequently adds `CLOSED` for the required meeting-close lifecycle.
 - [x] Meeting creation records the creating Admin.
 - [x] Meeting cancellation records the cancelling Admin and timestamp.
 - [x] Zoho Calendar provider added.
@@ -79,6 +79,31 @@
 - [x] Zoho Mail meeting notifications added.
 - [x] Missing third-party credentials remain nonfatal at application startup.
 
+## Stage 3 - Attendance — implementation complete; runtime/database validation pending
+
+- [x] Attendance Prisma model added with one authoritative record per `(meeting, member)`.
+- [x] Attendance states implemented: `PRESENT`, `ABSENT`, `EXCUSED`, `APOLOGY`, `ABSENT_NO_APOLOGY`, `APOLOGY_DRAFT`, `APOLOGY_DRAFT_REJECTED`.
+- [x] Attendance sources implemented for self, Admin, Zoho sync and system actions.
+- [x] Historical membership eligibility is evaluated against the meeting date, preserving roster history.
+- [x] Member self check-in implemented.
+- [x] Member pre-meeting apology implemented.
+- [x] Admin manual present/absent/excused marking implemented.
+- [x] Admin-only post-close corrections implemented with mandatory correction reason and appended audit metadata preserving the previous value.
+- [x] Meeting close implemented; unrecorded eligible members become `ABSENT_NO_APOLOGY`.
+- [x] Unconfirmed Zoho apology drafts convert to `APOLOGY` at close; explicitly rejected drafts remain rejected.
+- [x] Zoho RSVP synchronization implemented as on-demand only and gated by `lastSyncedAt`.
+- [x] Zoho RSVP `DECLINED` creates an `APOLOGY_DRAFT` only when no attendance/apology record already exists.
+- [x] In-app attendance/apology records are never overwritten by Zoho RSVP responses.
+- [x] Admin manual RSVP sync action implemented.
+- [x] Admin meeting-dashboard load performs a stale on-demand Zoho RSVP check.
+- [x] Cancelled meetings reject attendance mutations while retaining historical records.
+- [x] Closed meetings lock attendance mutations except Admin corrections.
+- [x] Attendance and RSVP mutations refresh authoritative server state in the UI.
+- [x] Attendance mutation audit events implemented.
+- [ ] Prisma migration for Stage 3 schema has not been executed.
+- [ ] Neon runtime validation has not been executed.
+- [ ] End-to-end attendance/Zoho integration validation has not been executed.
+
 ## Not Yet Executed
 
 - [ ] Prisma database migration.
@@ -87,9 +112,9 @@
 - [ ] Zoho Calendar credential validation.
 - [ ] Committee CRUD.
 - [ ] Membership administration.
-- [ ] Attendance workflow.
 - [ ] COI workflow.
 - [ ] Cloudflare R2 document workflow.
+- [ ] Zoho Mail Stage 6 notification completion for all future notification types.
 - [ ] Audit/reporting UI.
 - [ ] Exco/Management dashboard.
 - [ ] Production deployment validation.
@@ -126,6 +151,12 @@ Required runtime integrations:
 - Meeting updates fetch the current Zoho event etag before replacing the event resource.
 - Meeting cancellation deletes the Zoho event while retaining the meeting record and audit history in the application database.
 - Third-party credentials are intentionally deferred until the integration validation phase.
+- Stage 1 and Stage 2 were re-read and confirmed complete before Stage 3 implementation began.
+- Stage 3 introduces an explicit `CLOSED` meeting state because the original build specification requires a meeting-close operation that locks attendance and COI records.
+- Stage 3 uses a single unique attendance row per member/meeting; immutable correction history is preserved through append-only `AuditEvent` metadata rather than creating a duplicate correction table.
+- Zoho RSVP is treated as an external signal only. A Zoho decline creates a draft apology only when no application attendance record exists; application records always take precedence.
+- Zoho RSVP synchronization is strictly on-demand and uses a five-minute `lastSyncedAt` freshness gate. No Vercel Cron was added.
+- Attendance eligibility is based on membership dates at the meeting start, not current membership state, so historical committee participation remains auditable.
 
 ## Gotchas
 
@@ -135,3 +166,5 @@ Required runtime integrations:
 - Zoho Calendar credentials and a `zohoCalendarId` on the committee are required before meeting creation/update/cancellation can synchronize with Zoho.
 - `src/generated/prisma` is generated during the build and is excluded from Git.
 - Never expose raw invitation, reset or OTP tokens through API responses.
+- Stage 3 schema changes require a Prisma migration before runtime attendance operations can be used against Neon.
+- A closed meeting cannot be edited or cancelled because Stage 2 meeting mutations remain guarded by `SCHEDULED` status.
