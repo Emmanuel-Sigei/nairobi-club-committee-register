@@ -1,24 +1,25 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import LoginPage from "./auth/LoginPage";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 
-type Role = "ADMIN" | "EXCO_MANAGEMENT" | "MEMBER";
+type UserRole = "MEMBER" | "ADMIN" | "EXCO_MANAGEMENT";
+type MeetingStatus = "SCHEDULED" | "CANCELLED";
 
-type Committee = {
+interface Committee {
   id: string;
   name: string;
-  description?: string | null;
-  archivedAt?: string | null;
-};
+  slug: string;
+  type: string;
+}
 
-type AgendaItem = {
+interface AgendaItem {
   id?: string;
   position: number;
   title: string;
   description?: string | null;
-};
+}
 
-type Meeting = {
+interface Meeting {
   id: string;
   committeeId: string;
   title: string;
@@ -27,129 +28,225 @@ type Meeting = {
   endAt: string;
   timezone: string;
   location: string;
-  status: "SCHEDULED" | "CANCELLED";
-  createdAt: string;
+  status: MeetingStatus;
+  zohoEventUid?: string | null;
   cancelledAt?: string | null;
+  cancelledById?: string | null;
+  createdById: string;
+  createdAt: string;
+  updatedAt: string;
   committee: Committee;
-  createdBy?: {
-    id: string;
-    name: string;
-    email: string;
-  } | null;
-  cancelledBy?: {
-    id: string;
-    name: string;
-    email: string;
-  } | null;
   agendaItems: AgendaItem[];
-};
+}
 
-type FormState = {
+interface ApiResponse {
+  success: boolean;
+  error?: string;
+  code?: string;
+  warnings?: string[];
+  [key: string]: unknown;
+}
+
+interface MeetingFormState {
   committeeId: string;
   title: string;
   description: string;
-  date: string;
-  startTime: string;
-  endTime: string;
+  startAt: string;
+  endAt: string;
   timezone: string;
   location: string;
-  agendaItems: { title: string; description: string }[];
-};
+  agendaItems: Array<{
+    title: string;
+    description: string;
+  }>;
+}
 
-type Tab = "overview" | "meetings" | "committees" | "reports";
+type ActiveTab = "overview" | "meetings" | "committees" | "reports";
+type MeetingFilter = "upcoming" | "past" | "cancelled" | "all";
 
-const EMPTY_FORM: FormState = {
-  committeeId: "",
-  title: "",
-  description: "",
-  date: "",
-  startTime: "09:00",
-  endTime: "10:00",
-  timezone: "Africa/Nairobi",
-  location: "",
-  agendaItems: [{ title: "", description: "" }],
-};
-
-async function api<T>(
+async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
   const response = await fetch(path, {
-    credentials: "include",
     ...options,
+    credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...(options.headers ?? {}),
     },
   });
 
-  const contentType = response.headers.get("content-type") ?? "";
-  const payload = contentType.includes("application/json")
-    ? await response.json()
-    : null;
+  const text = await response.text();
+
+  let data: unknown = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = {
+        error: "Unexpected server response.",
+      };
+    }
+  }
 
   if (!response.ok) {
     const message =
-      payload &&
-      typeof payload === "object" &&
-      "error" in payload &&
-      typeof payload.error === "string"
-        ? payload.error
-        : "The request could not be completed.";
+      typeof data === "object" &&
+      data !== null &&
+      "error" in data &&
+      typeof data.error === "string"
+        ? data.error
+        : "Request failed.";
 
     throw new Error(message);
   }
 
-  return payload as T;
+  return data as T;
 }
 
-function formatDate(value: string, timezone: string) {
-  return new Intl.DateTimeFormat("en-GB", {
-    dateStyle: "medium",
-    timeStyle: "short",
-    timeZone: timezone,
-  }).format(new Date(value));
+function formatDateTime(value: string, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleString("en-GB");
+  }
 }
 
-function StatusBadge({ status }: { status: Meeting["status"] }) {
-  const cancelled = status === "CANCELLED";
+function formatDate(value: string, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      dateStyle: "full",
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleDateString("en-GB");
+  }
+}
+
+function formatTime(value: string, timezone: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      timeStyle: "short",
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleTimeString("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+}
+
+function roleLabel(role: UserRole): string {
+  switch (role) {
+    case "ADMIN":
+      return "Administrator";
+    case "EXCO_MANAGEMENT":
+      return "Exco Management";
+    case "MEMBER":
+      return "Committee Member";
+    default:
+      return role;
+  }
+}
+
+function emptyForm(committeeId = ""): MeetingFormState {
+  return {
+    committeeId,
+    title: "",
+    description: "",
+    startAt: "",
+    endAt: "",
+    timezone: "Africa/Nairobi",
+    location: "",
+    agendaItems: [
+      {
+        title: "",
+        description: "",
+      },
+    ],
+  };
+}
+
+function toDateTimeLocal(value: string): string {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+
+  return local.toISOString().slice(0, 16);
+}
+
+function formDateToIso(value: string): string {
+  return new Date(value).toISOString();
+}
+
+function Button({
+  children,
+  onClick,
+  type = "button",
+  variant = "secondary",
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  type?: "button" | "submit";
+  variant?: "primary" | "secondary" | "danger" | "ghost";
+  disabled?: boolean;
+}) {
+  const classes = {
+    primary:
+      "bg-slate-900 text-white hover:bg-slate-800 border-slate-900",
+    secondary:
+      "bg-white text-slate-800 hover:bg-slate-50 border-slate-300",
+    danger:
+      "bg-red-700 text-white hover:bg-red-800 border-red-700",
+    ghost:
+      "bg-transparent text-slate-600 hover:bg-slate-100 border-transparent",
+  };
+
+  return (
+    <button
+      type={type}
+      onClick={onClick}
+      disabled={disabled}
+      className={`inline-flex min-h-10 items-center justify-center rounded-lg border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${classes[variant]}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Badge({
+  children,
+  tone = "neutral",
+}: {
+  children: React.ReactNode;
+  tone?: "neutral" | "success" | "danger" | "gold";
+}) {
+  const classes = {
+    neutral: "bg-slate-100 text-slate-700",
+    success: "bg-emerald-50 text-emerald-700",
+    danger: "bg-red-50 text-red-700",
+    gold: "bg-amber-50 text-amber-800",
+  };
 
   return (
     <span
-      className={[
-        "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold",
-        cancelled
-          ? "bg-red-50 text-red-700"
-          : "bg-emerald-50 text-emerald-700",
-      ].join(" ")}
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ${classes[tone]}`}
     >
-      {cancelled ? "Cancelled" : "Scheduled"}
+      {children}
     </span>
-  );
-}
-
-function EmptyState({ text }: { text: string }) {
-  return (
-    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center text-sm text-slate-500">
-      {text}
-    </div>
-  );
-}
-
-function Detail({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div>
-      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
-        {label}
-      </div>
-      <div className="mt-1 text-sm font-medium text-slate-800">{children}</div>
-    </div>
   );
 }
 
@@ -162,7 +259,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-2 block text-sm font-medium text-slate-700">
+      <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
         {label}
       </span>
       {children}
@@ -170,1118 +267,55 @@ function Field({
   );
 }
 
-function MeetingForm({
-  editingMeeting,
-  committees,
-  form,
-  saving,
-  onChange,
-  onSave,
-  onClose,
-}: {
-  editingMeeting: Meeting | null;
-  committees: Committee[];
-  form: FormState;
-  saving: boolean;
-  onChange: React.Dispatch<React.SetStateAction<FormState>>;
-  onSave: () => void;
-  onClose: () => void;
-}) {
-  function updateAgenda(
-    index: number,
-    field: "title" | "description",
-    value: string,
-  ) {
-    onChange((current) => ({
-      ...current,
-      agendaItems: current.agendaItems.map((item, itemIndex) =>
-        itemIndex === index ? { ...item, [field]: value } : item,
-      ),
-    }));
-  }
-
+function TextInput(
+  props: React.InputHTMLAttributes<HTMLInputElement>,
+) {
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/40 p-4">
-      <div className="mx-auto my-8 max-w-3xl rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-400">
-              {editingMeeting ? "Edit meeting" : "New meeting"}
-            </div>
-            <h2 className="mt-1 text-xl font-semibold text-slate-950">
-              {editingMeeting ? "Update meeting" : "Schedule meeting"}
-            </h2>
-          </div>
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onClose}
-            className="rounded-lg px-3 py-2 text-sm text-slate-500 hover:bg-slate-100"
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="space-y-6 p-6">
-          {!editingMeeting && (
-            <Field label="Committee">
-              <select
-                value={form.committeeId}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    committeeId: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              >
-                <option value="">Select committee</option>
-                {committees
-                  .filter((committee) => !committee.archivedAt)
-                  .map((committee) => (
-                    <option key={committee.id} value={committee.id}>
-                      {committee.name}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-          )}
-
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label="Title">
-              <input
-                value={form.title}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    title: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              />
-            </Field>
-
-            <Field label="Location">
-              <input
-                value={form.location}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    location: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              />
-            </Field>
-          </div>
-
-          <Field label="Description">
-            <textarea
-              value={form.description}
-              onChange={(event) =>
-                onChange((current) => ({
-                  ...current,
-                  description: event.target.value,
-                }))
-              }
-              rows={4}
-              className="input resize-y"
-              disabled={saving}
-            />
-          </Field>
-
-          <div className="grid gap-5 sm:grid-cols-3">
-            <Field label="Date">
-              <input
-                type="date"
-                value={form.date}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    date: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              />
-            </Field>
-
-            <Field label="Start time">
-              <input
-                type="time"
-                value={form.startTime}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    startTime: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              />
-            </Field>
-
-            <Field label="End time">
-              <input
-                type="time"
-                value={form.endTime}
-                onChange={(event) =>
-                  onChange((current) => ({
-                    ...current,
-                    endTime: event.target.value,
-                  }))
-                }
-                className="input"
-                disabled={saving}
-              />
-            </Field>
-          </div>
-
-          <Field label="Timezone">
-            <input
-              value={form.timezone}
-              onChange={(event) =>
-                onChange((current) => ({
-                  ...current,
-                  timezone: event.target.value,
-                }))
-              }
-              className="input"
-              disabled={saving}
-            />
-          </Field>
-
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <div className="text-sm font-semibold text-slate-900">
-                  Agenda
-                </div>
-                <div className="mt-1 text-xs text-slate-500">
-                  Add at least one agenda item. Items retain their order.
-                </div>
-              </div>
-
-              <button
-                type="button"
-                disabled={saving}
-                onClick={() =>
-                  onChange((current) => ({
-                    ...current,
-                    agendaItems: [
-                      ...current.agendaItems,
-                      { title: "", description: "" },
-                    ],
-                  }))
-                }
-                className="text-sm font-semibold text-slate-900 hover:underline"
-              >
-                Add item
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              {form.agendaItems.map((item, index) => (
-                <div
-                  key={index}
-                  className="rounded-xl border border-slate-200 p-4"
-                >
-                  <div className="mb-3 flex items-center justify-between">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                      Item {index + 1}
-                    </span>
-
-                    {form.agendaItems.length > 1 && (
-                      <button
-                        type="button"
-                        disabled={saving}
-                        onClick={() =>
-                          onChange((current) => ({
-                            ...current,
-                            agendaItems: current.agendaItems.filter(
-                              (_, itemIndex) => itemIndex !== index,
-                            ),
-                          }))
-                        }
-                        className="text-xs font-semibold text-red-700 hover:underline"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="space-y-3">
-                    <input
-                      value={item.title}
-                      onChange={(event) =>
-                        updateAgenda(index, "title", event.target.value)
-                      }
-                      placeholder="Agenda item title"
-                      className="input"
-                      disabled={saving}
-                    />
-
-                    <textarea
-                      value={item.description}
-                      onChange={(event) =>
-                        updateAgenda(
-                          index,
-                          "description",
-                          event.target.value,
-                        )
-                      }
-                      placeholder="Description (optional)"
-                      rows={3}
-                      className="input resize-y"
-                      disabled={saving}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-5">
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            disabled={saving}
-            onClick={onSave}
-            className="rounded-lg bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-          >
-            {saving
-              ? "Saving..."
-              : editingMeeting
-                ? "Save changes"
-                : "Schedule meeting"}
-          </button>
-        </div>
-      </div>
-    </div>
+    <input
+      {...props}
+      className={`w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${props.className ?? ""}`}
+    />
   );
 }
 
-function MeetingDetail({
-  meeting,
-  cancelling,
-  onBack,
-  onEdit,
-  onCancel,
-}: {
-  meeting: Meeting;
-  canManage: boolean;
-  cancelling: boolean;
-  onBack: () => void;
-  onEdit: () => void;
-  onCancel: () => void;
-}) {
+function TextArea(
+  props: React.TextareaHTMLAttributes<HTMLTextAreaElement>,
+) {
   return (
-    <section>
-      <button
-        type="button"
-        onClick={onBack}
-        className="mb-6 text-sm font-semibold text-slate-600 hover:text-slate-950"
-      >
-        ? Back to meetings
-      </button>
-
-      <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-start">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <StatusBadge status={meeting.status} />
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              {meeting.committee.name}
-            </span>
-          </div>
-
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
-            {meeting.title}
-          </h1>
-
-          {meeting.description && (
-            <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">
-              {meeting.description}
-            </p>
-          )}
-        </div>
-
-        {canManage && meeting.status === "SCHEDULED" && (
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onEdit}
-              className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-            >
-              Edit
-            </button>
-
-            <button
-              type="button"
-              disabled={cancelling}
-              onClick={onCancel}
-              className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
-            >
-              {cancelling ? "Cancelling..." : "Cancel meeting"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-6 py-5">
-            <h2 className="font-semibold text-slate-950">Meeting details</h2>
-          </div>
-
-          <div className="grid gap-6 p-6 sm:grid-cols-2">
-            <Detail label="Date & time">
-              {formatDate(meeting.startAt, meeting.timezone)} �{" "}
-              {new Intl.DateTimeFormat("en-GB", {
-                timeStyle: "short",
-                timeZone: meeting.timezone,
-              }).format(new Date(meeting.endAt))}
-            </Detail>
-
-            <Detail label="Timezone">{meeting.timezone}</Detail>
-            <Detail label="Location">{meeting.location}</Detail>
-            <Detail label="Committee">{meeting.committee.name}</Detail>
-
-            {meeting.createdBy && (
-              <Detail label="Created by">{meeting.createdBy.name}</Detail>
-            )}
-
-            <Detail label="Created">
-              {formatDate(meeting.createdAt, meeting.timezone)}
-            </Detail>
-
-            {meeting.cancelledAt && (
-              <Detail label="Cancelled">
-                {formatDate(meeting.cancelledAt, meeting.timezone)}
-              </Detail>
-            )}
-
-            {meeting.cancelledBy && (
-              <Detail label="Cancelled by">{meeting.cancelledBy.name}</Detail>
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-200 px-6 py-5">
-            <h2 className="font-semibold text-slate-950">Agenda</h2>
-          </div>
-
-          {meeting.agendaItems.length === 0 ? (
-            <div className="p-6">
-              <EmptyState text="No agenda items recorded." />
-            </div>
-          ) : (
-            <ol className="divide-y divide-slate-100">
-              {meeting.agendaItems.map((item) => (
-                <li key={item.id ?? item.position} className="px-6 py-5">
-                  <div className="flex gap-4">
-                    <span className="text-sm font-semibold text-slate-400">
-                      {String(item.position).padStart(2, "0")}
-                    </span>
-
-                    <div>
-                      <div className="font-medium text-slate-950">
-                        {item.title}
-                      </div>
-
-                      {item.description && (
-                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-500">
-                          {item.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      </div>
-    </section>
+    <textarea
+      {...props}
+      className={`w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${props.className ?? ""}`}
+    />
   );
 }
 
-function AppShell() {
-  const { user, loading, logout } = useAuth();
-
-  const [tab, setTab] = useState<Tab>("overview");
-  const [meetings, setMeetings] = useState<Meeting[]>([]);
-  const [committees, setCommittees] = useState<Committee[]>([]);
-  const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null);
-  const [loadingData, setLoadingData] = useState(false);
-  const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
-  const [filter, setFilter] = useState<
-    "UPCOMING" | "PAST" | "CANCELLED" | "ALL"
-  >("UPCOMING");
-  const [committeeFilter, setCommitteeFilter] = useState("");
-  const [formOpen, setFormOpen] = useState(false);
-  const [editingMeeting, setEditingMeeting] = useState<Meeting | null>(null);
-  const [form, setForm] = useState<FormState>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  const [cancelling, setCancelling] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
-
-  const role = user?.role as Role | undefined;
-  const canManage = role === "ADMIN";
-
-  async function loadData() {
-    if (!user) return;
-
-    setLoadingData(true);
-    setError("");
-
-    try {
-      const [meetingResponse, committeeResponse] = await Promise.all([
-        api<{ meetings: Meeting[] }>("/api/meetings"),
-        api<{ committees: Committee[] }>("/api/committees"),
-      ]);
-
-      setMeetings(meetingResponse.meetings);
-      setCommittees(committeeResponse.committees);
-
-      if (selectedMeeting) {
-        const refreshed = meetingResponse.meetings.find(
-          (meeting) => meeting.id === selectedMeeting.id,
-        );
-
-        setSelectedMeeting(refreshed ?? null);
-      }
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to load register data.",
-      );
-    } finally {
-      setLoadingData(false);
-    }
-  }
-
-  useEffect(() => {
-    void loadData();
-  }, [user]);
-
-  const visibleMeetings = useMemo(() => {
-    const now = Date.now();
-
-    return meetings.filter((meeting) => {
-      if (
-        committeeFilter &&
-        meeting.committeeId !== committeeFilter
-      ) {
-        return false;
-      }
-
-      if (filter === "CANCELLED") {
-        return meeting.status === "CANCELLED";
-      }
-
-      if (filter === "UPCOMING") {
-        return (
-          meeting.status === "SCHEDULED" &&
-          new Date(meeting.startAt).getTime() >= now
-        );
-      }
-
-      if (filter === "PAST") {
-        return (
-          meeting.status === "SCHEDULED" &&
-          new Date(meeting.startAt).getTime() < now
-        );
-      }
-
-      return true;
-    });
-  }, [meetings, filter, committeeFilter]);
-
-  const upcomingCount = meetings.filter(
-    (meeting) =>
-      meeting.status === "SCHEDULED" &&
-      new Date(meeting.startAt).getTime() >= Date.now(),
-  ).length;
-
-  const cancelledCount = meetings.filter(
-    (meeting) => meeting.status === "CANCELLED",
-  ).length;
-
-  function openCreate() {
-    setEditingMeeting(null);
-    setForm({
-      ...EMPTY_FORM,
-      committeeId: committees.find((committee) => !committee.archivedAt)?.id ?? "",
-    });
-    setError("");
-    setNotice("");
-    setFormOpen(true);
-  }
-
-  function openEdit(meeting: Meeting) {
-    const start = new Date(meeting.startAt);
-    const end = new Date(meeting.endAt);
-
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: meeting.timezone,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    });
-
-    const timeFormatter = new Intl.DateTimeFormat("en-GB", {
-      timeZone: meeting.timezone,
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    });
-
-    setEditingMeeting(meeting);
-    setForm({
-      committeeId: meeting.committeeId,
-      title: meeting.title,
-      description: meeting.description ?? "",
-      date: formatter.format(start),
-      startTime: timeFormatter.format(start),
-      endTime: timeFormatter.format(end),
-      timezone: meeting.timezone,
-      location: meeting.location,
-      agendaItems:
-        meeting.agendaItems.length > 0
-          ? meeting.agendaItems.map((item) => ({
-              title: item.title,
-              description: item.description ?? "",
-            }))
-          : [{ title: "", description: "" }],
-    });
-    setError("");
-    setNotice("");
-    setFormOpen(true);
-  }
-
-  function buildDate(date: string, time: string) {
-    return new Date(`${date}T${time}:00`).toISOString();
-  }
-
-  async function saveMeeting() {
-    setError("");
-    setNotice("");
-
-    if (!form.committeeId && !editingMeeting) {
-      setError("Select a committee.");
-      return;
-    }
-
-    if (!form.title.trim()) {
-      setError("Meeting title is required.");
-      return;
-    }
-
-    if (!form.date || !form.startTime || !form.endTime) {
-      setError("Date, start time and end time are required.");
-      return;
-    }
-
-    const start = new Date(`${form.date}T${form.startTime}:00`);
-    const end = new Date(`${form.date}T${form.endTime}:00`);
-
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
-      setError("Enter a valid date and time.");
-      return;
-    }
-
-    if (end <= start) {
-      setError("End time must be after start time.");
-      return;
-    }
-
-    const agendaItems = form.agendaItems
-      .map((item) => ({
-        title: item.title.trim(),
-        description: item.description.trim(),
-      }))
-      .filter((item) => item.title);
-
-    if (agendaItems.length === 0) {
-      setError("Add at least one agenda item with a title.");
-      return;
-    }
-
-    setSaving(true);
-
-    try {
-      if (editingMeeting) {
-        await api(`/api/meetings/${editingMeeting.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            title: form.title.trim(),
-            description: form.description.trim() || null,
-            startAt: buildDate(form.date, form.startTime),
-            endAt: buildDate(form.date, form.endTime),
-            timezone: form.timezone.trim(),
-            location: form.location.trim(),
-            agendaItems,
-          }),
-        });
-      } else {
-        await api("/api/meetings", {
-          method: "POST",
-          body: JSON.stringify({
-            committeeId: form.committeeId,
-            title: form.title.trim(),
-            description: form.description.trim() || null,
-            startAt: buildDate(form.date, form.startTime),
-            endAt: buildDate(form.date, form.endTime),
-            timezone: form.timezone.trim(),
-            location: form.location.trim(),
-            agendaItems,
-          }),
-        });
-      }
-
-      setFormOpen(false);
-      setEditingMeeting(null);
-      setNotice(
-        editingMeeting
-          ? "Meeting updated successfully."
-          : "Meeting scheduled successfully.",
-      );
-
-      await loadData();
-      setTab("meetings");
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to save meeting.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function cancelMeeting() {
-    if (!selectedMeeting) return;
-
-    setCancelling(true);
-    setError("");
-    setNotice("");
-
-    try {
-      await api(`/api/meetings/${selectedMeeting.id}`, {
-        method: "DELETE",
-      });
-
-      setConfirmCancel(false);
-      setNotice("Meeting cancelled successfully.");
-
-      await loadData();
-
-      const refreshed = meetings.find(
-        (meeting) => meeting.id === selectedMeeting.id,
-      );
-
-      if (refreshed) {
-        setSelectedMeeting({
-          ...refreshed,
-          status: "CANCELLED",
-        });
-      }
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : "Unable to cancel meeting.",
-      );
-    } finally {
-      setCancelling(false);
-    }
-  }
-
-  if (loading) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-100 text-sm text-slate-500">
-        Loading...
-      </main>
-    );
-  }
-
-  if (!user) {
-    return <LoginPage />;
-  }
-
-  if (selectedMeeting) {
-    return (
-      <main className="min-h-screen bg-slate-100">
-        <Header
-          user={user}
-          onLogout={() => void logout()}
-          tab={tab}
-          onTab={setTab}
-        />
-
-        <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-          {error && <Alert type="error" text={error} />}
-          {notice && <Alert type="success" text={notice} />}
-
-          <MeetingDetail
-            meeting={selectedMeeting}
-            canManage={canManage}
-            cancelling={cancelling}
-            onBack={() => setSelectedMeeting(null)}
-            onEdit={() => openEdit(selectedMeeting)}
-            onCancel={() => setConfirmCancel(true)}
-          />
-        </div>
-
-        {formOpen && (
-          <MeetingForm
-            editingMeeting={editingMeeting}
-            committees={committees}
-            form={form}
-            saving={saving}
-            onChange={setForm}
-            onSave={() => void saveMeeting()}
-            onClose={() => {
-              if (!saving) setFormOpen(false);
-            }}
-          />
-        )}
-
-        {confirmCancel && (
-          <ConfirmCancel
-            cancelling={cancelling}
-            onClose={() => {
-              if (!cancelling) setConfirmCancel(false);
-            }}
-            onConfirm={() => void cancelMeeting()}
-          />
-        )}
-      </main>
-    );
-  }
-
+function Select(
+  props: React.SelectHTMLAttributes<HTMLSelectElement>,
+) {
   return (
-    <main className="min-h-screen bg-slate-100">
-      <Header
-        user={user}
-        onLogout={() => void logout()}
-        tab={tab}
-        onTab={setTab}
-      />
-
-      <div className="mx-auto max-w-7xl px-5 py-8 sm:px-8">
-        {error && <Alert type="error" text={error} />}
-        {notice && <Alert type="success" text={notice} />}
-
-        {tab === "overview" && (
-          <section>
-            <div className="mb-8">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Committee Register
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                Good day, {user.name}
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Committee governance, membership and meeting information in one
-                controlled register.
-              </p>
-            </div>
-
-            <div className="grid gap-5 sm:grid-cols-3">
-              <Metric label="Committees" value={committees.length} />
-              <Metric label="Upcoming meetings" value={upcomingCount} />
-              <Metric label="Cancelled meetings" value={cancelledCount} />
-            </div>
-
-            <div className="mt-8 rounded-2xl border border-slate-200 bg-white p-6">
-              <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
-                <div>
-                  <h2 className="font-semibold text-slate-950">
-                    Upcoming meetings
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    The next scheduled committee meetings available to you.
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setTab("meetings")}
-                  className="text-sm font-semibold text-slate-900 hover:underline"
-                >
-                  View all meetings ?
-                </button>
-              </div>
-
-              <div className="mt-5">
-                {loadingData ? (
-                  <div className="py-8 text-center text-sm text-slate-500">
-                    Loading meetings...
-                  </div>
-                ) : upcomingCount === 0 ? (
-                  <EmptyState text="No upcoming meetings recorded." />
-                ) : (
-                  <div className="divide-y divide-slate-100">
-                    {meetings
-                      .filter(
-                        (meeting) =>
-                          meeting.status === "SCHEDULED" &&
-                          new Date(meeting.startAt).getTime() >= Date.now(),
-                      )
-                      .slice(0, 5)
-                      .map((meeting) => (
-                        <button
-                          type="button"
-                          key={meeting.id}
-                          onClick={() => setSelectedMeeting(meeting)}
-                          className="flex w-full flex-col gap-1 px-1 py-4 text-left hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                        >
-                          <div>
-                            <div className="font-medium text-slate-950">
-                              {meeting.title}
-                            </div>
-                            <div className="mt-1 text-sm text-slate-500">
-                              {meeting.committee.name}
-                            </div>
-                          </div>
-
-                          <div className="text-sm text-slate-500">
-                            {formatDate(
-                              meeting.startAt,
-                              meeting.timezone,
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </section>
-        )}
-
-        {tab === "meetings" && (
-          <section>
-            <div className="mb-7 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                  Meetings
-                </p>
-                <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                  Committee meetings
-                </h1>
-                <p className="mt-2 text-sm text-slate-500">
-                  Schedule, review and manage committee meetings.
-                </p>
-              </div>
-
-              {canManage && (
-                <button
-                  type="button"
-                  onClick={openCreate}
-                  className="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"
-                >
-                  Schedule meeting
-                </button>
-              )}
-            </div>
-
-            <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-              <select
-                value={filter}
-                onChange={(event) =>
-                  setFilter(event.target.value as typeof filter)
-                }
-                className="input sm:w-48"
-              >
-                <option value="UPCOMING">Upcoming</option>
-                <option value="PAST">Past</option>
-                <option value="CANCELLED">Cancelled</option>
-                <option value="ALL">All meetings</option>
-              </select>
-
-              <select
-                value={committeeFilter}
-                onChange={(event) => setCommitteeFilter(event.target.value)}
-                className="input sm:max-w-xs"
-              >
-                <option value="">All committees</option>
-                {committees.map((committee) => (
-                  <option key={committee.id} value={committee.id}>
-                    {committee.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {loadingData ? (
-              <EmptyState text="Loading meetings..." />
-            ) : visibleMeetings.length === 0 ? (
-              <EmptyState text="No meetings match the selected filters." />
-            ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <div className="divide-y divide-slate-100">
-                  {visibleMeetings.map((meeting) => (
-                    <button
-                      type="button"
-                      key={meeting.id}
-                      onClick={() => setSelectedMeeting(meeting)}
-                      className="flex w-full flex-col gap-4 px-6 py-5 text-left hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <StatusBadge status={meeting.status} />
-                          <span className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                            {meeting.committee.name}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 truncate font-semibold text-slate-950">
-                          {meeting.title}
-                        </div>
-
-                        <div className="mt-1 text-sm text-slate-500">
-                          {meeting.location}
-                        </div>
-                      </div>
-
-                      <div className="shrink-0 text-sm text-slate-500">
-                        {formatDate(meeting.startAt, meeting.timezone)}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {tab === "committees" && (
-          <section>
-            <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Register
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                Committees
-              </h1>
-              <p className="mt-2 text-sm text-slate-500">
-                The committees available within your access scope.
-              </p>
-            </div>
-
-            {loadingData ? (
-              <EmptyState text="Loading committees..." />
-            ) : committees.length === 0 ? (
-              <EmptyState text="No committees are currently available." />
-            ) : (
-              <div className="grid gap-5 md:grid-cols-2">
-                {committees.map((committee) => (
-                  <div
-                    key={committee.id}
-                    className="rounded-2xl border border-slate-200 bg-white p-6"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <h2 className="font-semibold text-slate-950">
-                        {committee.name}
-                      </h2>
-
-                      {committee.archivedAt && (
-                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">
-                          Archived
-                        </span>
-                      )}
-                    </div>
-
-                    {committee.description && (
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-500">
-                        {committee.description}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </section>
-        )}
-
-        {tab === "reports" && (
-          <section>
-            <div className="mb-7">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">
-                Reporting
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
-                Reports & intelligence
-              </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
-                Reporting, audit intelligence, Exco dashboards and exports are
-                scheduled for the reporting stage of the platform.
-              </p>
-            </div>
-
-            <EmptyState text="Reporting and audit dashboards will become available in Stage 7. No fabricated metrics are displayed here." />
-          </section>
-        )}
-      </div>
-
-      {formOpen && (
-        <MeetingForm
-          editingMeeting={editingMeeting}
-          committees={committees}
-          form={form}
-          saving={saving}
-          onChange={setForm}
-          onSave={() => void saveMeeting()}
-          onClose={() => {
-            if (!saving) setFormOpen(false);
-          }}
-        />
-      )}
-
-      {confirmCancel && (
-        <ConfirmCancel
-          cancelling={cancelling}
-          onClose={() => {
-            if (!cancelling) setConfirmCancel(false);
-          }}
-          onConfirm={() => void cancelMeeting()}
-        />
-      )}
-    </main>
+    <select
+      {...props}
+      className={`w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200 ${props.className ?? ""}`}
+    />
   );
 }
 
 function Header({
   user,
+  activeTab,
+  onTabChange,
   onLogout,
-  tab,
-  onTab,
 }: {
-  user: { name: string; email: string; role: string };
+  user: {
+    name: string;
+    email: string;
+    role: UserRole;
+  };
+  activeTab: ActiveTab;
+  onTabChange: (tab: ActiveTab) => void;
   onLogout: () => void;
-  tab: Tab;
-  onTab: (tab: Tab) => void;
 }) {
-  const tabs: { id: Tab; label: string }[] = [
+  const navigation: Array<{ id: ActiveTab; label: string }> = [
     { id: "overview", label: "Overview" },
     { id: "meetings", label: "Meetings" },
     { id: "committees", label: "Committees" },
@@ -1290,154 +324,1472 @@ function Header({
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-7xl items-center justify-between gap-5 px-5 py-4 sm:px-8">
-        <button
-          type="button"
-          onClick={() => onTab("overview")}
-          className="text-left"
-        >
-          <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-slate-400">
-            Nairobi Club
-          </p>
-          <div className="mt-0.5 text-lg font-semibold tracking-tight text-slate-950">
-            Committee Register
-          </div>
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="hidden text-right sm:block">
-            <div className="text-sm font-semibold text-slate-900">
-              {user.name}
-            </div>
-            <div className="text-xs uppercase tracking-wide text-slate-400">
-              {user.role}
-            </div>
-          </div>
-
+      <div className="mx-auto max-w-7xl px-6">
+        <div className="flex min-h-20 items-center justify-between gap-6">
           <button
             type="button"
-            onClick={onLogout}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+            onClick={() => onTabChange("overview")}
+            className="text-left"
           >
-            Sign out
+            <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">
+              Nairobi Club
+            </p>
+            <h1 className="mt-0.5 text-xl font-semibold tracking-tight text-slate-950">
+              Committee Register
+            </h1>
           </button>
+
+          <div className="hidden items-center gap-1 md:flex">
+            {navigation.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onTabChange(item.id)}
+                className={`rounded-lg px-3.5 py-2 text-sm font-medium transition ${
+                  activeTab === item.id
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-sm font-semibold text-slate-900">
+                {user.name}
+              </p>
+              <p className="text-xs text-slate-500">
+                {roleLabel(user.role)}
+              </p>
+            </div>
+
+            <Button variant="secondary" onClick={onLogout}>
+              Sign out
+            </Button>
+          </div>
         </div>
-      </div>
 
-      <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-5 sm:px-8">
-        {tabs.map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            onClick={() => onTab(item.id)}
-            className={[
-              "border-b-2 px-3 py-3 text-sm font-semibold transition",
-              tab === item.id
-                ? "border-slate-900 text-slate-950"
-                : "border-transparent text-slate-400 hover:text-slate-700",
-            ].join(" ")}
-          >
-            {item.label}
-          </button>
-        ))}
+        <div className="flex gap-1 overflow-x-auto border-t border-slate-100 py-2 md:hidden">
+          {navigation.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onTabChange(item.id)}
+              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium ${
+                activeTab === item.id
+                  ? "bg-slate-900 text-white"
+                  : "text-slate-600"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
       </div>
     </header>
   );
 }
 
-function Metric({
+function Overview({
+  user,
+  meetings,
+  committees,
+  onMeetings,
+  onCreateMeeting,
+}: {
+  user: {
+    name: string;
+    email: string;
+    role: UserRole;
+  };
+  meetings: Meeting[];
+  committees: Committee[];
+  onMeetings: () => void;
+  onCreateMeeting: () => void;
+}) {
+  const now = Date.now();
+
+  const scheduled = meetings.filter(
+    (meeting) => meeting.status === "SCHEDULED",
+  );
+
+  const upcoming = scheduled
+    .filter((meeting) => new Date(meeting.startAt).getTime() >= now)
+    .sort(
+      (a, b) =>
+        new Date(a.startAt).getTime() -
+        new Date(b.startAt).getTime(),
+    );
+
+  return (
+    <div className="space-y-8">
+      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-end">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+              Committee Administration
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+              Good day, {user.name.split(" ")[0]}.
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              Manage committee meetings, agendas and the authoritative
+              meeting record from one place.
+            </p>
+          </div>
+
+          {user.role === "ADMIN" && (
+            <Button variant="primary" onClick={onCreateMeeting}>
+              Schedule meeting
+            </Button>
+          )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          label="Committees"
+          value={String(committees.length)}
+          detail="Accessible committee records"
+        />
+        <StatCard
+          label="Scheduled meetings"
+          value={String(scheduled.length)}
+          detail="Current meeting records"
+        />
+        <StatCard
+          label="Upcoming"
+          value={String(upcoming.length)}
+          detail="Future scheduled meetings"
+        />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
+          <div>
+            <h3 className="font-semibold text-slate-950">
+              Next meetings
+            </h3>
+            <p className="mt-1 text-sm text-slate-500">
+              The next scheduled committee engagements.
+            </p>
+          </div>
+
+          <Button variant="ghost" onClick={onMeetings}>
+            View all
+          </Button>
+        </div>
+
+        {upcoming.length === 0 ? (
+          <EmptyState
+            title="No upcoming meetings"
+            description="There are currently no future scheduled meetings in your accessible committees."
+          />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {upcoming.slice(0, 5).map((meeting) => (
+              <div
+                key={meeting.id}
+                className="flex flex-col gap-3 px-6 py-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+                    {meeting.committee.name}
+                  </p>
+                  <h4 className="mt-1 font-semibold text-slate-950">
+                    {meeting.title}
+                  </h4>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {formatDateTime(
+                      meeting.startAt,
+                      meeting.timezone,
+                    )}{" "}
+                    · {meeting.location}
+                  </p>
+                </div>
+
+                <Badge tone="success">Scheduled</Badge>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <p className="text-xs font-bold uppercase tracking-[0.15em] text-slate-500">
+        {label}
+      </p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+        {value}
+      </p>
+      <p className="mt-1 text-sm text-slate-500">{detail}</p>
+    </div>
+  );
+}
+
+function MeetingsView({
+  meetings,
+  committees,
+  user,
+  onRefresh,
+  onCreate,
+}: {
+  meetings: Meeting[];
+  committees: Committee[];
+  user: {
+    role: UserRole;
+  };
+  onRefresh: () => Promise<void>;
+  onCreate: () => void;
+}) {
+  const [filter, setFilter] =
+    useState<MeetingFilter>("upcoming");
+  const [committeeId, setCommitteeId] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(
+    null,
+  );
+
+  const filteredMeetings = useMemo(() => {
+    const now = Date.now();
+
+    return [...meetings]
+      .filter((meeting) => {
+        if (committeeId && meeting.committeeId !== committeeId) {
+          return false;
+        }
+
+        if (filter === "cancelled") {
+          return meeting.status === "CANCELLED";
+        }
+
+        if (filter === "upcoming") {
+          return (
+            meeting.status === "SCHEDULED" &&
+            new Date(meeting.startAt).getTime() >= now
+          );
+        }
+
+        if (filter === "past") {
+          return (
+            meeting.status === "SCHEDULED" &&
+            new Date(meeting.endAt).getTime() < now
+          );
+        }
+
+        return true;
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.startAt).getTime() -
+          new Date(b.startAt).getTime(),
+      );
+  }, [meetings, filter, committeeId]);
+
+  const selectedMeeting =
+    selectedId === null
+      ? null
+      : meetings.find((meeting) => meeting.id === selectedId) ??
+        null;
+
+  if (selectedMeeting) {
+    return (
+      <MeetingDetail
+        meeting={selectedMeeting}
+        user={user}
+        onBack={() => setSelectedId(null)}
+        onRefresh={onRefresh}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <section className="flex flex-col justify-between gap-5 lg:flex-row lg:items-end">
+        <div>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+            Meetings
+          </p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+            Committee meetings
+          </h2>
+          <p className="mt-2 text-sm text-slate-600">
+            The meeting register is synchronized with the configured
+            Zoho Calendar events.
+          </p>
+        </div>
+
+        {user.role === "ADMIN" && (
+          <Button variant="primary" onClick={onCreate}>
+            Schedule meeting
+          </Button>
+        )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row">
+          <div className="flex flex-wrap gap-2">
+            {(
+              [
+                ["upcoming", "Upcoming"],
+                ["past", "Past"],
+                ["cancelled", "Cancelled"],
+                ["all", "All"],
+              ] as Array<[MeetingFilter, string]>
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                  filter === value
+                    ? "bg-slate-900 text-white"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="lg:ml-auto lg:w-72">
+            <Select
+              value={committeeId}
+              onChange={(event) =>
+                setCommitteeId(event.target.value)
+              }
+            >
+              <option value="">All committees</option>
+              {committees.map((committee) => (
+                <option
+                  key={committee.id}
+                  value={committee.id}
+                >
+                  {committee.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        {filteredMeetings.length === 0 ? (
+          <EmptyState
+            title="No meetings found"
+            description="There are no meetings matching the selected filters."
+          />
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filteredMeetings.map((meeting) => (
+              <button
+                key={meeting.id}
+                type="button"
+                onClick={() => setSelectedId(meeting.id)}
+                className="block w-full px-6 py-5 text-left transition hover:bg-slate-50"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">
+                        {meeting.committee.name}
+                      </p>
+                      {meeting.status === "CANCELLED" ? (
+                        <Badge tone="danger">Cancelled</Badge>
+                      ) : (
+                        <Badge tone="success">Scheduled</Badge>
+                      )}
+                    </div>
+
+                    <h3 className="mt-1 truncate text-lg font-semibold text-slate-950">
+                      {meeting.title}
+                    </h3>
+
+                    <p className="mt-1 text-sm text-slate-600">
+                      {formatDateTime(
+                        meeting.startAt,
+                        meeting.timezone,
+                      )}{" "}
+                      · {meeting.location}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 text-sm font-semibold text-slate-500">
+                    {meeting.agendaItems.length} agenda{" "}
+                    {meeting.agendaItems.length === 1
+                      ? "item"
+                      : "items"}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function MeetingDetail({
+  meeting,
+  user,
+  onBack,
+  onRefresh,
+}: {
+  meeting: Meeting;
+  user: {
+    role: UserRole;
+  };
+  onBack: () => void;
+  onRefresh: () => Promise<void>;
+}) {
+  const canManage = user.role === "ADMIN";
+
+  const [showEdit, setShowEdit] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [message, setMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
+
+  async function cancelMeeting() {
+    setWorking(true);
+    setMessage("");
+    setErrorMessage("");
+
+    try {
+      const response = await apiRequest<ApiResponse<Meeting>>(
+        `/api/meetings/${encodeURIComponent(meeting.id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      await onRefresh();
+
+      setShowCancel(false);
+      setMessage(
+        response.warnings?.length
+          ? `Meeting cancelled. ${response.warnings.join(" ")}`
+          : "Meeting cancelled successfully.",
+      );
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to cancel meeting.",
+      );
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  if (showEdit) {
+    return (
+      <MeetingForm
+        committees={[meeting.committee]}
+        initialMeeting={meeting}
+        onCancel={() => setShowEdit(false)}
+        onSaved={async () => {
+          setShowEdit(false);
+          await onRefresh();
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Button variant="ghost" onClick={onBack}>
+          ← Back to meetings
+        </Button>
+      </div>
+
+      {message && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {message}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-start">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">
+                {meeting.committee.name}
+              </p>
+
+              {meeting.status === "CANCELLED" ? (
+                <Badge tone="danger">Cancelled</Badge>
+              ) : (
+                <Badge tone="success">Scheduled</Badge>
+              )}
+            </div>
+
+            <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+              {meeting.title}
+            </h2>
+
+            {meeting.description && (
+              <p className="mt-4 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                {meeting.description}
+              </p>
+            )}
+          </div>
+
+          {canManage &&
+            meeting.status === "SCHEDULED" && (
+              <div className="flex gap-2">
+                <Button onClick={() => setShowEdit(true)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="danger"
+                  onClick={() => setShowCancel(true)}
+                >
+                  Cancel meeting
+                </Button>
+              </div>
+            )}
+        </div>
+      </section>
+
+      <section className="grid gap-4 md:grid-cols-2">
+        <DetailCard
+          label="Date"
+          value={formatDate(
+            meeting.startAt,
+            meeting.timezone,
+          )}
+        />
+        <DetailCard
+          label="Time"
+          value={`${formatTime(
+            meeting.startAt,
+            meeting.timezone,
+          )} – ${formatTime(
+            meeting.endAt,
+            meeting.timezone,
+          )} (${meeting.timezone})`}
+        />
+        <DetailCard
+          label="Location"
+          value={meeting.location}
+        />
+        <DetailCard
+          label="Committee"
+          value={meeting.committee.name}
+        />
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-200 px-6 py-5">
+          <h3 className="font-semibold text-slate-950">
+            Agenda
+          </h3>
+          <p className="mt-1 text-sm text-slate-500">
+            Ordered agenda items recorded against this meeting.
+          </p>
+        </div>
+
+        <div className="divide-y divide-slate-100">
+          {meeting.agendaItems.map((item) => (
+            <div
+              key={item.id ?? `${item.position}-${item.title}`}
+              className="flex gap-4 px-6 py-5"
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+                {item.position}
+              </div>
+
+              <div>
+                <h4 className="font-semibold text-slate-950">
+                  {item.title}
+                </h4>
+
+                {item.description && (
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-600">
+                    {item.description}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h3 className="font-semibold text-slate-950">
+          Record information
+        </h3>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <DetailCard
+            label="Created"
+            value={formatDateTime(
+              meeting.createdAt,
+              meeting.timezone,
+            )}
+          />
+          <DetailCard
+            label="Last updated"
+            value={formatDateTime(
+              meeting.updatedAt,
+              meeting.timezone,
+            )}
+          />
+
+          {meeting.cancelledAt && (
+            <DetailCard
+              label="Cancelled"
+              value={formatDateTime(
+                meeting.cancelledAt,
+                meeting.timezone,
+              )}
+            />
+          )}
+        </div>
+      </section>
+
+      {showCancel && (
+        <Modal
+          title="Cancel this meeting?"
+          onClose={() => {
+            if (!working) setShowCancel(false);
+          }}
+        >
+          <p className="text-sm leading-6 text-slate-600">
+            This will remove the event from Zoho Calendar and
+            mark the meeting as cancelled. The meeting record
+            and its history will remain available.
+          </p>
+
+          <div className="mt-6 flex justify-end gap-2">
+            <Button
+              disabled={working}
+              onClick={() => setShowCancel(false)}
+            >
+              Keep meeting
+            </Button>
+            <Button
+              variant="danger"
+              disabled={working}
+              onClick={() => void cancelMeeting()}
+            >
+              {working ? "Cancelling…" : "Cancel meeting"}
+            </Button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function DetailCard({
   label,
   value,
 }: {
   label: string;
-  value: number;
+  value: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-6">
-      <div className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-400">
+    <div className="rounded-xl border border-slate-200 p-4">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
         {label}
-      </div>
-      <div className="mt-3 text-3xl font-semibold tracking-tight text-slate-950">
+      </p>
+      <p className="mt-1 text-sm font-medium leading-6 text-slate-900">
         {value}
-      </div>
+      </p>
     </div>
   );
 }
 
-function Alert({
-  type,
-  text,
+function MeetingForm({
+  committees,
+  initialMeeting,
+  onCancel,
+  onSaved,
 }: {
-  type: "error" | "success";
-  text: string;
+  committees: Committee[];
+  initialMeeting?: Meeting;
+  onCancel: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [form, setForm] = useState<MeetingFormState>(() => {
+    if (!initialMeeting) {
+      return emptyForm(committees[0]?.id ?? "");
+    }
+
+    return {
+      committeeId: initialMeeting.committeeId,
+      title: initialMeeting.title,
+      description: initialMeeting.description ?? "",
+      startAt: toDateTimeLocal(initialMeeting.startAt),
+      endAt: toDateTimeLocal(initialMeeting.endAt),
+      timezone: initialMeeting.timezone,
+      location: initialMeeting.location,
+      agendaItems:
+        initialMeeting.agendaItems.length > 0
+          ? initialMeeting.agendaItems.map((item) => ({
+              title: item.title,
+              description: item.description ?? "",
+            }))
+          : [{ title: "", description: "" }],
+    };
+  });
+
+  const [saving, setSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  function updateField<K extends keyof MeetingFormState>(
+    field: K,
+    value: MeetingFormState[K],
+  ) {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  }
+
+  function updateAgenda(
+    index: number,
+    field: "title" | "description",
+    value: string,
+  ) {
+    setForm((current) => ({
+      ...current,
+      agendaItems: current.agendaItems.map(
+        (item, itemIndex) =>
+          itemIndex === index
+            ? {
+                ...item,
+                [field]: value,
+              }
+            : item,
+      ),
+    }));
+  }
+
+  function addAgendaItem() {
+    setForm((current) => ({
+      ...current,
+      agendaItems: [
+        ...current.agendaItems,
+        {
+          title: "",
+          description: "",
+        },
+      ],
+    }));
+  }
+
+  function removeAgendaItem(index: number) {
+    setForm((current) => {
+      if (current.agendaItems.length === 1) {
+        return current;
+      }
+
+      return {
+        ...current,
+        agendaItems: current.agendaItems.filter(
+          (_, itemIndex) => itemIndex !== index,
+        ),
+      };
+    });
+  }
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    setErrorMessage("");
+    setSuccessMessage("");
+
+    if (!form.committeeId) {
+      setErrorMessage("Select a committee.");
+      return;
+    }
+
+    if (!form.title.trim()) {
+      setErrorMessage("Meeting title is required.");
+      return;
+    }
+
+    if (!form.startAt || !form.endAt) {
+      setErrorMessage(
+        "Start and end date/time are required.",
+      );
+      return;
+    }
+
+    const start = new Date(form.startAt);
+    const end = new Date(form.endAt);
+
+    if (
+      Number.isNaN(start.getTime()) ||
+      Number.isNaN(end.getTime())
+    ) {
+      setErrorMessage("Enter valid meeting dates and times.");
+      return;
+    }
+
+    if (end <= start) {
+      setErrorMessage(
+        "The meeting end time must be later than the start time.",
+      );
+      return;
+    }
+
+    if (!form.location.trim()) {
+      setErrorMessage("Meeting location is required.");
+      return;
+    }
+
+    const agendaItems = form.agendaItems.map((item) => ({
+      title: item.title.trim(),
+      description: item.description.trim(),
+    }));
+
+    if (agendaItems.some((item) => !item.title)) {
+      setErrorMessage(
+        "Every agenda item must have a title.",
+      );
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      const payload = {
+        committeeId: form.committeeId,
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        startAt: formDateToIso(form.startAt),
+        endAt: formDateToIso(form.endAt),
+        timezone: form.timezone.trim() || "Africa/Nairobi",
+        location: form.location.trim(),
+        agendaItems,
+      };
+
+      const endpoint = initialMeeting
+        ? `/api/meetings/${encodeURIComponent(
+            initialMeeting.id,
+          )}`
+        : "/api/meetings";
+
+      const method = initialMeeting ? "PATCH" : "POST";
+
+      const response = await apiRequest<
+        ApiResponse<Meeting>
+      >(endpoint, {
+        method,
+        body: JSON.stringify(payload),
+      });
+
+      setSuccessMessage(
+        response.warnings?.length
+          ? `Meeting saved. ${response.warnings.join(" ")}`
+          : initialMeeting
+            ? "Meeting updated successfully."
+            : "Meeting scheduled successfully.",
+      );
+
+      await onSaved();
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to save meeting.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <Button variant="ghost" onClick={onCancel}>
+          ← Back
+        </Button>
+      </div>
+
+      <section>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          {initialMeeting ? "Edit meeting" : "New meeting"}
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          {initialMeeting
+            ? "Update meeting"
+            : "Schedule a committee meeting"}
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Changes are written to the meeting register and the
+          committee's configured Zoho Calendar.
+        </p>
+      </section>
+
+      {errorMessage && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+          {errorMessage}
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm leading-6 text-emerald-800">
+          {successMessage}
+        </div>
+      )}
+
+      <form
+        onSubmit={submit}
+        className="space-y-6"
+      >
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <h3 className="font-semibold text-slate-950">
+            Meeting details
+          </h3>
+
+          <div className="mt-5 grid gap-5 md:grid-cols-2">
+            <Field label="Committee">
+              <Select
+                value={form.committeeId}
+                onChange={(event) =>
+                  updateField(
+                    "committeeId",
+                    event.target.value,
+                  )
+                }
+                disabled={
+                  Boolean(initialMeeting) ||
+                  saving
+                }
+              >
+                <option value="">
+                  Select committee
+                </option>
+
+                {committees.map((committee) => (
+                  <option
+                    key={committee.id}
+                    value={committee.id}
+                  >
+                    {committee.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field label="Title">
+              <TextInput
+                value={form.title}
+                onChange={(event) =>
+                  updateField(
+                    "title",
+                    event.target.value,
+                  )
+                }
+                placeholder="Committee meeting title"
+                disabled={saving}
+              />
+            </Field>
+
+            <div className="md:col-span-2">
+              <Field label="Description">
+                <TextArea
+                  value={form.description}
+                  onChange={(event) =>
+                    updateField(
+                      "description",
+                      event.target.value,
+                    )
+                  }
+                  rows={4}
+                  placeholder="Meeting purpose, context or notes"
+                  disabled={saving}
+                />
+              </Field>
+            </div>
+
+            <Field label="Start">
+              <TextInput
+                type="datetime-local"
+                value={form.startAt}
+                onChange={(event) =>
+                  updateField(
+                    "startAt",
+                    event.target.value,
+                  )
+                }
+                disabled={saving}
+              />
+            </Field>
+
+            <Field label="End">
+              <TextInput
+                type="datetime-local"
+                value={form.endAt}
+                onChange={(event) =>
+                  updateField(
+                    "endAt",
+                    event.target.value,
+                  )
+                }
+                disabled={saving}
+              />
+            </Field>
+
+            <Field label="Timezone">
+              <Select
+                value={form.timezone}
+                onChange={(event) =>
+                  updateField(
+                    "timezone",
+                    event.target.value,
+                  )
+                }
+                disabled={saving}
+              >
+                <option value="Africa/Nairobi">
+                  Africa/Nairobi
+                </option>
+                <option value="UTC">UTC</option>
+              </Select>
+            </Field>
+
+            <Field label="Location">
+              <TextInput
+                value={form.location}
+                onChange={(event) =>
+                  updateField(
+                    "location",
+                    event.target.value,
+                  )
+                }
+                placeholder="Meeting room or venue"
+                disabled={saving}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="font-semibold text-slate-950">
+                Agenda
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Add the agenda in the order it should appear
+                in the official meeting record.
+              </p>
+            </div>
+
+            <Button
+              variant="secondary"
+              onClick={addAgendaItem}
+              disabled={saving}
+            >
+              Add item
+            </Button>
+          </div>
+
+          <div className="mt-5 space-y-4">
+            {form.agendaItems.map((item, index) => (
+              <div
+                key={index}
+                className="rounded-xl border border-slate-200 p-4"
+              >
+                <div className="flex items-start gap-4">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-sm font-bold text-slate-600">
+                    {index + 1}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-4">
+                    <Field label="Agenda title">
+                      <TextInput
+                        value={item.title}
+                        onChange={(event) =>
+                          updateAgenda(
+                            index,
+                            "title",
+                            event.target.value,
+                          )
+                        }
+                        placeholder="Agenda item"
+                        disabled={saving}
+                      />
+                    </Field>
+
+                    <Field label="Description">
+                      <TextArea
+                        value={item.description}
+                        onChange={(event) =>
+                          updateAgenda(
+                            index,
+                            "description",
+                            event.target.value,
+                          )
+                        }
+                        rows={3}
+                        placeholder="Optional agenda detail"
+                        disabled={saving}
+                      />
+                    </Field>
+                  </div>
+
+                  {form.agendaItems.length > 1 && (
+                    <Button
+                      variant="ghost"
+                      onClick={() =>
+                        removeAgendaItem(index)
+                      }
+                      disabled={saving}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="flex justify-end gap-2">
+          <Button
+            variant="secondary"
+            onClick={onCancel}
+            disabled={saving}
+          >
+            Cancel
+          </Button>
+
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={saving}
+          >
+            {saving
+              ? "Saving…"
+              : initialMeeting
+                ? "Save changes"
+                : "Schedule meeting"}
+          </Button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function CommitteesView({
+  committees,
+}: {
+  committees: Committee[];
+}) {
+  return (
+    <div className="space-y-6">
+      <section>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          Committees
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Committee register
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">
+          Committees available to your current account.
+        </p>
+      </section>
+
+      {committees.length === 0 ? (
+        <EmptyState
+          title="No committees available"
+          description="There are no committee records accessible to your account."
+        />
+      ) : (
+        <section className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {committees.map((committee) => (
+            <article
+              key={committee.id}
+              className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+            >
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+                {committee.type}
+              </p>
+
+              <h3 className="mt-2 text-lg font-semibold text-slate-950">
+                {committee.name}
+              </h3>
+
+              <p className="mt-2 text-sm text-slate-500">
+                {committee.slug}
+              </p>
+            </article>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function ReportsView() {
+  return (
+    <div className="space-y-6">
+      <section>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          Reports
+        </p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950">
+          Reporting & audit
+        </h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+          Formal reporting, audit exploration, Exco dashboards
+          and CSV reporting are scheduled for Stage 7. No
+          fabricated metrics are displayed here.
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-dashed border-slate-300 bg-white p-8">
+        <p className="text-sm font-semibold text-slate-900">
+          Stage 7
+        </p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">
+          The reporting surface will be connected to
+          authoritative application and audit data when that
+          stage is implemented.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+function EmptyState({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="px-6 py-14 text-center">
+      <h3 className="font-semibold text-slate-900">
+        {title}
+      </h3>
+      <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+        {description}
+      </p>
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  children,
+  onClose,
+}: {
+  title: string;
+  children: React.ReactNode;
+  onClose: () => void;
 }) {
   return (
     <div
-      className={[
-        "mb-5 rounded-xl border px-4 py-3 text-sm",
-        type === "error"
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-emerald-200 bg-emerald-50 text-emerald-800",
-      ].join(" ")}
-      role="status"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) {
+          onClose();
+        }
+      }}
     >
-      {text}
+      <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-6 shadow-2xl">
+        <h2 className="text-xl font-semibold text-slate-950">
+          {title}
+        </h2>
+        {children}
+      </div>
     </div>
   );
 }
 
-function ConfirmCancel({
-  cancelling,
-  onClose,
-  onConfirm,
-}: {
-  cancelling: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
-        <h2 className="text-xl font-semibold text-slate-950">
-          Cancel this meeting?
-        </h2>
+function AuthenticatedApp() {
+  const { user, loading, logout } = useAuth();
 
-        <p className="mt-3 text-sm leading-6 text-slate-600">
-          This will remove the event from Zoho Calendar and mark the meeting
-          as cancelled. The meeting record and its history will remain
-          available.
-        </p>
+  const [activeTab, setActiveTab] =
+    useState<ActiveTab>("overview");
 
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            disabled={cancelling}
-            onClick={onClose}
-            className="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Keep meeting
-          </button>
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [committees, setCommittees] = useState<Committee[]>(
+    [],
+  );
 
-          <button
-            type="button"
-            disabled={cancelling}
-            onClick={onConfirm}
-            className="rounded-lg bg-red-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-red-800 disabled:opacity-50"
-          >
-            {cancelling ? "Cancelling..." : "Cancel meeting"}
-          </button>
+  const [loadingData, setLoadingData] = useState(false);
+  const [dataError, setDataError] = useState("");
+  const [showCreate, setShowCreate] = useState(false);
+
+  async function loadData() {
+    if (!user) return;
+
+    setLoadingData(true);
+    setDataError("");
+
+    try {
+      const [meetingResponse, committeeResponse] =
+        await Promise.all([
+          apiRequest<ApiResponse<Meeting[]>>(
+            "/api/meetings",
+          ),
+          apiRequest<ApiResponse<Committee[]>>(
+            "/api/committees",
+          ),
+        ]);
+
+      const loadedMeetings = Array.isArray(
+        meetingResponse.meetings,
+      )
+        ? (meetingResponse.meetings as Meeting[])
+        : [];
+
+      const loadedCommittees = Array.isArray(
+        committeeResponse.committees,
+      )
+        ? (committeeResponse.committees as Committee[])
+        : [];
+
+      setMeetings(loadedMeetings);
+      setCommittees(loadedCommittees);
+    } catch (caught) {
+      setDataError(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to load application data.",
+      );
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!user) return;
+
+    void loadData();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white">
+        <div className="text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-400">
+            Nairobi Club
+          </p>
+          <p className="mt-3 text-sm text-slate-300">
+            Loading Committee Register…
+          </p>
         </div>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
+
+  async function refreshAfterMutation() {
+    await loadData();
+  }
+
+  return (
+    <main className="min-h-screen bg-slate-50 text-slate-950">
+      <Header
+        user={user}
+        activeTab={activeTab}
+        onTabChange={(tab) => {
+          setShowCreate(false);
+          setActiveTab(tab);
+        }}
+        onLogout={() => void logout()}
+      />
+
+      <div className="mx-auto max-w-7xl px-6 py-8">
+        {dataError && (
+          <div className="mb-6 flex flex-col justify-between gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:flex-row sm:items-center">
+            <span>{dataError}</span>
+            <Button
+              variant="secondary"
+              onClick={() => void loadData()}
+            >
+              Retry
+            </Button>
+          </div>
+        )}
+
+        {loadingData && meetings.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center shadow-sm">
+            <p className="text-sm text-slate-500">
+              Loading committee register…
+            </p>
+          </div>
+        ) : showCreate ? (
+          <MeetingForm
+            committees={committees}
+            onCancel={() => setShowCreate(false)}
+            onSaved={async () => {
+              await refreshAfterMutation();
+              setShowCreate(false);
+              setActiveTab("meetings");
+            }}
+          />
+        ) : activeTab === "overview" ? (
+          <Overview
+            user={user}
+            meetings={meetings}
+            committees={committees}
+            onMeetings={() => setActiveTab("meetings")}
+            onCreateMeeting={() => setShowCreate(true)}
+          />
+        ) : activeTab === "meetings" ? (
+          <MeetingsView
+            meetings={meetings}
+            committees={committees}
+            user={user}
+            onRefresh={refreshAfterMutation}
+            onCreate={() => setShowCreate(true)}
+          />
+        ) : activeTab === "committees" ? (
+          <CommitteesView committees={committees} />
+        ) : (
+          <ReportsView />
+        )}
       </div>
-    </div>
+    </main>
   );
 }
 
 export default function App() {
   return (
     <AuthProvider>
-      <AppShell />
+      <AuthenticatedApp />
     </AuthProvider>
   );
 }
-
-
