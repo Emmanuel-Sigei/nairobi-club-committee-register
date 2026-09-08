@@ -3,7 +3,6 @@ import { writeAuditEvent } from "../_lib/audit";
 import { createCalendarEvent, deleteCalendarEvent, CalendarNotConfiguredError } from "../_lib/calendar";
 import { getDb } from "../_lib/db";
 import { error, json, readJson } from "../_lib/http";
-import { canViewCommittee } from "../_lib/permissions";
 import {
   isZohoMailConfigured,
   sendMeetingNotification,
