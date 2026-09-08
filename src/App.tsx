@@ -415,7 +415,7 @@ function Overview({
   onMeetings: () => void;
   onCreateMeeting: () => void;
 }) {
-  const now = Date.now();
+  const [now] = useState(() => Date.now());
 
   const scheduled = meetings.filter(
     (meeting) => meeting.status === "SCHEDULED",
@@ -570,9 +570,9 @@ function MeetingsView({
     null,
   );
 
-  const filteredMeetings = useMemo(() => {
-    const now = Date.now();
+  const [now] = useState(() => Date.now());
 
+  const filteredMeetings = useMemo(() => {
     return [...meetings]
       .filter((meeting) => {
         if (committeeId && meeting.committeeId !== committeeId) {
@@ -1698,7 +1698,13 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!user) return;
 
-    void loadData();
+    const timer = window.setTimeout(() => {
+      void loadData();
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
   }, [user]);
 
   if (loading) {

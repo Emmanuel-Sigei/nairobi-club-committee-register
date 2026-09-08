@@ -272,7 +272,31 @@ async function updateMeeting(
       endAt,
       timezone,
       location,
-      attendees: [],
+      attendees: providerSnapshot.resource.attendees
+        && Array.isArray(providerSnapshot.resource.attendees)
+        ? providerSnapshot.resource.attendees
+            .map((attendee) => {
+              if (
+                typeof attendee !== "object" ||
+                attendee === null ||
+                typeof (attendee as Record<string, unknown>).email !== "string"
+              ) {
+                return null;
+              }
+
+              return {
+                email: String(
+                  (attendee as Record<string, unknown>).email,
+                ),
+              };
+            })
+            .filter(
+              (
+                attendee,
+              ): attendee is { email: string } =>
+                attendee !== null,
+            )
+        : [],
     });
 
     let updatedMeeting;
@@ -289,6 +313,7 @@ async function updateMeeting(
           return tx.meeting.update({
             where: {
               id: meetingId,
+              status: "SCHEDULED",
             },
             data: {
               title,
@@ -457,7 +482,9 @@ async function updateMeeting(
   } catch (caught) {
     if (isCalendarConfigurationError(caught)) {
       return error(
-        caught.message,
+        caught instanceof Error
+          ? caught.message
+          : "Zoho Calendar is not configured.",
         503,
         "CALENDAR_NOT_CONFIGURED",
       );
@@ -540,6 +567,7 @@ async function cancelMeeting(
       cancelledMeeting = await getDb().meeting.update({
         where: {
           id: meetingId,
+          status: "SCHEDULED",
         },
         data: {
           status: "CANCELLED",
@@ -702,7 +730,9 @@ async function cancelMeeting(
   } catch (caught) {
     if (isCalendarConfigurationError(caught)) {
       return error(
-        caught.message,
+        caught instanceof Error
+          ? caught.message
+          : "Zoho Calendar is not configured.",
         503,
         "CALENDAR_NOT_CONFIGURED",
       );

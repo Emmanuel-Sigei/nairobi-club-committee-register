@@ -1,4 +1,4 @@
-﻿import { getAuthenticatedUser } from "../_lib/auth";
+import { getAuthenticatedUser } from "../_lib/auth";
 import { writeAuditEvent } from "../_lib/audit";
 import {
   CalendarNotConfiguredError,
@@ -366,7 +366,7 @@ async function createMeeting(request: Request) {
             action: "MEETING_CREATE_COMPENSATION_FAILED",
             entityType: "Meeting",
             metadata: {
-              committeeId: calendarId,
+              calendarId,
               zohoEventUid,
               message:
                 compensationError instanceof Error
