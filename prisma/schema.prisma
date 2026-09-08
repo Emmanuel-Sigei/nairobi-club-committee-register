@@ -38,6 +38,11 @@ enum AuditActorType {
   SYSTEM
 }
 
+enum MeetingStatus {
+  SCHEDULED
+  CANCELLED
+}
+
 model User {
   id                 String          @id @default(cuid())
   email              String          @unique
@@ -57,6 +62,8 @@ model User {
   otpChallenges      OtpChallenge[]
   oneTimeTokens      OneTimeToken[]
   auditEvents        AuditEvent[]    @relation("AuditActor")
+  createdMeetings    Meeting[]       @relation("MeetingCreatedBy")
+  cancelledMeetings  Meeting[]       @relation("MeetingCancelledBy")
 
   @@index([role])
   @@index([isActive])
@@ -78,6 +85,7 @@ model Committee {
   updatedAt        DateTime      @updatedAt
 
   memberships      Membership[]
+  meetings         Meeting[]
 
   @@index([type])
   @@index([parentId])
@@ -102,6 +110,49 @@ model Membership {
   @@index([userId, committeeId])
   @@index([committeeId, startDate])
   @@index([committeeId, endDate])
+}
+
+model Meeting {
+  id               String        @id @default(cuid())
+  committeeId      String
+  title            String
+  description      String?
+  startAt          DateTime
+  endAt            DateTime
+  timezone         String        @default("Africa/Nairobi")
+  location         String
+  status            MeetingStatus @default(SCHEDULED)
+  zohoEventUid     String?
+  cancelledAt      DateTime?
+  cancelledById    String?
+  createdById      String
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  committee        Committee     @relation(fields: [committeeId], references: [id], onDelete: Restrict)
+  createdBy        User          @relation("MeetingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  cancelledBy      User?         @relation("MeetingCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  agendaItems      AgendaItem[]
+
+  @@index([committeeId, startAt])
+  @@index([status, startAt])
+  @@index([zohoEventUid])
+  @@index([createdById])
+}
+
+model AgendaItem {
+  id               String    @id @default(cuid())
+  meetingId        String
+  position         Int
+  title            String
+  description      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  meeting          Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, position])
+  @@index([meetingId, position])
 }
 
 model Session {

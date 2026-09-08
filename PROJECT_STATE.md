@@ -62,15 +62,31 @@
 - [x] Frontend authentication context implemented.
 - [x] Frontend login and OTP flow implemented.
 
+## Stage 2 - Meetings and Zoho Calendar
+
+- [x] Meeting and agenda Prisma models added.
+- [x] Meeting statuses added (`SCHEDULED`, `CANCELLED`).
+- [x] Meeting creation records the creating Admin.
+- [x] Meeting cancellation records the cancelling Admin and timestamp.
+- [x] Zoho Calendar provider added.
+- [x] Zoho Calendar create/update/delete event integration added.
+- [x] Committee active members are sent as calendar attendees.
+- [x] Meeting list endpoint added with committee access control.
+- [x] Meeting detail endpoint added with committee access control.
+- [x] Admin meeting update endpoint added.
+- [x] Admin meeting cancellation endpoint added.
+- [x] Meeting mutation audit events added.
+- [x] Zoho Mail meeting notifications added.
+- [x] Missing third-party credentials remain nonfatal at application startup.
+
 ## Not Yet Executed
 
 - [ ] Prisma database migration.
 - [ ] Neon database connection validation.
 - [ ] Zoho Mail credential validation.
-- [ ] Zoho Calendar integration.
+- [ ] Zoho Calendar credential validation.
 - [ ] Committee CRUD.
 - [ ] Membership administration.
-- [ ] Meeting CRUD.
 - [ ] Attendance workflow.
 - [ ] COI workflow.
 - [ ] Cloudflare R2 document workflow.
@@ -91,6 +107,8 @@ Required runtime integrations:
 - `ZOHO_MAIL_ACCOUNT_ID`
 - `ZOHO_MAIL_FROM_ADDRESS`
 - `ZOHO_MAIL_FROM_NAME`
+- `ZOHO_CALENDAR_API_BASE_URL`
+- `ZOHO_CALENDAR_ACCESS_TOKEN`
 
 ## Decisions Log
 
@@ -101,14 +119,19 @@ Required runtime integrations:
 - Prisma datasource configuration moved to `prisma.config.ts`.
 - Neon adapter retained for serverless PostgreSQL.
 - All source rewrites use BOM-free UTF-8.
-- No database migration or `db push` performed during hardening.
+- No database migration or `db push` performed during hardening or Stage 2.
 - No Vercel Cron configuration added.
 - Zoho Mail retained as the mandatory application email provider.
+- Zoho Calendar integration uses the official Calendar REST API and committee-level calendar UIDs.
+- Meeting updates fetch the current Zoho event etag before replacing the event resource.
+- Meeting cancellation deletes the Zoho event while retaining the meeting record and audit history in the application database.
+- Third-party credentials are intentionally deferred until the integration validation phase.
 
 ## Gotchas
 
 - `DATABASE_URL` is required when API code actually accesses the database.
 - `DATABASE_URL` is not required for Prisma client generation.
-- Zoho Mail credentials must be populated before invitation, OTP and password-reset email flows can operate.
+- Zoho Mail credentials must be populated before invitation, OTP, password-reset, or meeting notification email flows can operate.
+- Zoho Calendar credentials and a `zohoCalendarId` on the committee are required before meeting creation/update/cancellation can synchronize with Zoho.
 - `src/generated/prisma` is generated during the build and is excluded from Git.
 - Never expose raw invitation, reset or OTP tokens through API responses.

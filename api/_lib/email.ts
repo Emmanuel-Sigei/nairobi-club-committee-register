@@ -42,6 +42,15 @@ export function assertZohoMailConfigured(): void {
   getConfig();
 }
 
+export function isZohoMailConfigured(): boolean {
+  return Boolean(
+    process.env.ZOHO_MAIL_API_BASE_URL?.trim() &&
+      process.env.ZOHO_MAIL_ACCESS_TOKEN?.trim() &&
+      process.env.ZOHO_MAIL_ACCOUNT_ID?.trim() &&
+      process.env.ZOHO_MAIL_FROM_ADDRESS?.trim(),
+  );
+}
+
 function escapeHtml(value: string): string {
   return value
     .replaceAll("&", "&amp;")
@@ -176,4 +185,54 @@ export async function sendPasswordResetConfirmation(
       <p>Regards,<br>Nairobi Club ICT</p>
     `,
   });
+}
+
+export async function sendMeetingNotification(
+  recipients: Array<{ email: string; name: string }>,
+  input: {
+    type: "scheduled" | "updated" | "cancelled";
+    title: string;
+    committeeName: string;
+    startAt: Date;
+    endAt: Date;
+    timezone: string;
+    location: string;
+    meetingId: string;
+  },
+): Promise<void> {
+  const subjectPrefix =
+    input.type === "scheduled"
+      ? "Committee meeting scheduled"
+      : input.type === "updated"
+        ? "Committee meeting updated"
+        : "Committee meeting cancelled";
+  const appMeetingUrl = `${appUrl()}/meetings/${encodeURIComponent(input.meetingId)}`;
+  const start = input.startAt.toLocaleString("en-KE", {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: input.timezone,
+  });
+  const end = input.endAt.toLocaleTimeString("en-KE", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: input.timezone,
+  });
+
+  for (const recipient of recipients) {
+    const safeName = escapeHtml(recipient.name);
+    await sendZohoMail({
+      toAddress: recipient.email,
+      subject: `Nairobi Club: ${subjectPrefix} — ${input.title}`,
+      content: `
+        <p>Dear ${safeName},</p>
+        <p><strong>${escapeHtml(subjectPrefix)}</strong></p>
+        <p><strong>Committee:</strong> ${escapeHtml(input.committeeName)}</p>
+        <p><strong>Meeting:</strong> ${escapeHtml(input.title)}</p>
+        <p><strong>When:</strong> ${escapeHtml(start)} – ${escapeHtml(end)} (${escapeHtml(input.timezone)})</p>
+        <p><strong>Location:</strong> ${escapeHtml(input.location)}</p>
+        <p><a href="${appMeetingUrl}">Open meeting in the Committee Register</a></p>
+        <p>Regards,<br>Nairobi Club ICT</p>
+      `,
+    });
+  }
 }
