@@ -13,6 +13,9 @@ import {
   isZohoMailConfigured,
   sendMeetingNotification,
 } from "../_lib/email";
+import {
+  createMeetingInAppNotifications,
+} from "../_lib/notifications";
 import { canViewCommittee } from "../_lib/permissions";
 
 interface MeetingInput {
@@ -155,6 +158,7 @@ async function getMeetingRecipients(
     include: {
       user: {
         select: {
+          id: true,
           email: true,
           name: true,
         },
@@ -426,6 +430,32 @@ async function updateMeeting(
       );
     }
 
+    try {
+      await createMeetingInAppNotifications({
+        recipientUserIds:
+          recipients.map(
+            (recipient) =>
+              recipient.id,
+          ),
+        type:
+          "updated",
+        meetingId,
+        meetingTitle:
+          title,
+        committeeName:
+          existing.committee.name,
+      });
+    } catch (notificationError) {
+      console.error(
+        "Meeting updated but in-app notifications could not be written.",
+        notificationError,
+      );
+
+      warnings.push(
+        "Meeting was updated, but in-app notifications could not be recorded.",
+      );
+    }
+
     if (isZohoMailConfigured()) {
       try {
 
@@ -668,6 +698,38 @@ async function cancelMeeting(
 
       warnings.push(
         "Meeting was cancelled, but the audit event could not be recorded.",
+      );
+    }
+
+    try {
+      const notificationRecipients =
+        await getMeetingRecipients(
+          existing.committeeId,
+          existing.startAt,
+        );
+
+      await createMeetingInAppNotifications({
+        recipientUserIds:
+          notificationRecipients.map(
+            (recipient) =>
+              recipient.id,
+          ),
+        type:
+          "cancelled",
+        meetingId,
+        meetingTitle:
+          existing.title,
+        committeeName:
+          existing.committee.name,
+      });
+    } catch (notificationError) {
+      console.error(
+        "Meeting cancelled but in-app notifications could not be written.",
+        notificationError,
+      );
+
+      warnings.push(
+        "Meeting was cancelled, but in-app notifications could not be recorded.",
       );
     }
 

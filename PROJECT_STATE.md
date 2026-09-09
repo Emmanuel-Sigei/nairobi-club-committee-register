@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Architecture Freeze Pass C1 implemented; Pass C2 remains before architecture freeze approval.
+Architecture Freeze Pass C2B implemented; final freeze verification remains.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -180,3 +180,35 @@ Architecture Freeze Pass C1 implemented; Pass C2 remains before architecture fre
 - [x] Active App.tsx mojibake removed.
 - [ ] Pass C2 Admin management surfaces + in-app notifications.
 - [ ] Final architecture freeze audit.
+## Architecture Freeze Pass C2A
+
+- [x] Notification persistence model defined.
+- [x] Authenticated notification list/read APIs implemented.
+- [x] Meeting scheduled/updated/cancelled lifecycle writes in-app notifications.
+- [x] Zoho Mail remains the exclusive email provider.
+- [x] Admin user directory read API implemented.
+- [x] Admin membership/roster read API implemented.
+- [x] Safe 48-hour invitation resend API implemented.
+- [x] Invitation resend audit history is append-only.
+- [ ] Prisma migration deferred to infrastructure phase.
+- [ ] C2B Admin management UI.
+- [ ] C2B Notification UI.
+- [ ] Final architecture freeze audit.
+## Architecture Freeze Pass C2B
+
+- [x] Administration navigation is visible only to Administrators.
+- [x] Admin user directory UI implemented.
+- [x] New user invitation UI implemented.
+- [x] Invitation resend UI implemented.
+- [x] Account deactivation UI implemented.
+- [x] Additional committee membership UI implemented.
+- [x] Membership role update UI implemented.
+- [x] Membership term-ending UI implemented.
+- [x] Committee create/edit/archive UI implemented.
+- [x] In-app notification list UI implemented.
+- [x] Individual notification read workflow implemented.
+- [x] Mark-all-read workflow implemented.
+- [x] Meeting notifications open the authenticated meeting route.
+- [ ] Final architecture freeze verification.
+- [ ] Production dependency audit review.
+- [ ] Neon / Zoho / R2 / Vercel infrastructure phase.

@@ -11,6 +11,9 @@ import {
   isZohoMailConfigured,
   sendMeetingNotification,
 } from "../_lib/email";
+import {
+  createMeetingInAppNotifications,
+} from "../_lib/notifications";
 
 interface MeetingInput {
   committeeId?: unknown;
@@ -197,6 +200,7 @@ async function createMeeting(request: Request) {
           include: {
             user: {
               select: {
+                id: true,
                 email: true,
                 name: true,
               },
@@ -308,6 +312,33 @@ async function createMeeting(request: Request) {
 
       warnings.push(
         "Meeting was created, but the audit event could not be recorded.",
+      );
+    }
+
+    try {
+      await createMeetingInAppNotifications({
+        recipientUserIds:
+          committee.memberships.map(
+            ({ user }) =>
+              user.id,
+          ),
+        type:
+          "scheduled",
+        meetingId:
+          meeting.id,
+        meetingTitle:
+          title,
+        committeeName:
+          committee.name,
+      });
+    } catch (notificationError) {
+      console.error(
+        "Meeting created but in-app notifications could not be written.",
+        notificationError,
+      );
+
+      warnings.push(
+        "Meeting was created, but in-app notifications could not be recorded.",
       );
     }
 

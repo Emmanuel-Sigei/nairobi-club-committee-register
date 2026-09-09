@@ -39,6 +39,65 @@ export default async function handler(request: Request): Promise<Response> {
   if (!context) return error("Authentication required.", 401);
   if (context.user.role !== "ADMIN") return error("Administrator access required.", 403);
 
+  if (request.method === "GET") {
+    const url =
+      new URL(
+        request.url,
+      );
+
+    const committeeId =
+      url.searchParams.get(
+        "committeeId",
+      );
+
+    const userId =
+      url.searchParams.get(
+        "userId",
+      );
+
+    const memberships =
+      await getDb().membership.findMany({
+        where: {
+          ...(committeeId
+            ? {
+                committeeId,
+              }
+            : {}),
+          ...(userId
+            ? {
+                userId,
+              }
+            : {}),
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              isActive: true,
+            },
+          },
+          committee: {
+            select: {
+              id: true,
+              name: true,
+              archivedAt: true,
+            },
+          },
+        },
+        orderBy: {
+          createdAt:
+            "desc",
+        },
+      });
+
+    return json({
+      success: true,
+      memberships,
+    });
+  }
+
   if (request.method === "POST") {
     try {
       const body = await readJson<MembershipInput>(request);
