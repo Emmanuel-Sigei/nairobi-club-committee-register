@@ -1,5 +1,13 @@
 import { getDb } from "../_lib/db";
-import { sendPasswordResetEmail } from "../_lib/email";
+import {
+  sendPasswordResetEmail,
+} from "../_lib/email";
+import {
+  consumeRateLimit,
+  enforceIpRateLimit,
+  isTrustedMutationOrigin,
+  securityKey,
+} from "../_lib/hardening";
 import {
   error,
   getClientIp,
@@ -20,23 +28,78 @@ interface ResetRequestBody {
 export default async function handler(
   request: Request,
 ): Promise<Response> {
-  if (request.method !== "POST") {
-    return error("Method not allowed.", 405);
+  if (
+    request.method !== "POST"
+  ) {
+    return error(
+      "Method not allowed.",
+      405,
+    );
+  }
+
+  if (
+    !isTrustedMutationOrigin(
+      request,
+    )
+  ) {
+    return error(
+      "Request origin is not permitted.",
+      403,
+      "ORIGIN_REJECTED",
+    );
+  }
+
+  const ipLimit =
+    await enforceIpRateLimit(
+      request,
+      "password-reset-ip",
+      5,
+      60 * 60_000,
+      60 * 60_000,
+    );
+
+  if (!ipLimit.allowed) {
+    return error(
+      "Too many password reset requests. Please try again later.",
+      429,
+      "RATE_LIMITED",
+      {
+        "Retry-After":
+          String(
+            ipLimit.retryAfterSeconds,
+          ),
+      },
+    );
   }
 
   let body: ResetRequestBody;
 
   try {
-    body = await readJson<ResetRequestBody>(request);
+    body =
+      await readJson<ResetRequestBody>(
+        request,
+      );
   } catch {
-    return error("Invalid request body.", 400);
+    return error(
+      "Invalid request body.",
+      400,
+    );
   }
 
-  if (typeof body.email !== "string") {
-    return error("Invalid request.", 400);
+  if (
+    typeof body.email !==
+      "string"
+  ) {
+    return error(
+      "Invalid request.",
+      400,
+    );
   }
 
-  const email = normalizeEmail(body.email);
+  const email =
+    normalizeEmail(
+      body.email,
+    );
 
   const genericResponse = () =>
     json({
@@ -45,29 +108,59 @@ export default async function handler(
         "If an active account exists for that email address, a password reset message has been sent.",
     });
 
-  const db = getDb();
+  const accountLimit =
+    await consumeRateLimit(
+      securityKey(
+        "password-reset-account",
+        email,
+      ),
+      3,
+      60 * 60_000,
+      60 * 60_000,
+    );
 
-  const user = await db.user.findUnique({
-    where: {
-      email,
-    },
-  });
-
-  if (!user || !user.isActive) {
+  if (
+    !accountLimit.allowed
+  ) {
     return genericResponse();
   }
 
-  const rawToken = generateToken();
-  const tokenHash = hashToken(rawToken);
-  const now = new Date();
-  const expiresAt = new Date(
-    now.getTime() + 60 * 60_000,
-  );
+  const db = getDb();
+
+  const user =
+    await db.user.findUnique({
+      where: {
+        email,
+      },
+    });
+
+  if (
+    !user ||
+    !user.isActive
+  ) {
+    return genericResponse();
+  }
+
+  const rawToken =
+    generateToken();
+
+  const tokenHash =
+    hashToken(rawToken);
+
+  const now =
+    new Date();
+
+  const expiresAt =
+    new Date(
+      now.getTime() +
+        60 * 60_000,
+    );
 
   await db.oneTimeToken.updateMany({
     where: {
       userId: user.id,
-      purpose: "PASSWORD_RESET",
+      purpose:
+        "PASSWORD_RESET",
       usedAt: null,
     },
     data: {
@@ -75,14 +168,16 @@ export default async function handler(
     },
   });
 
-  const token = await db.oneTimeToken.create({
-    data: {
-      userId: user.id,
-      purpose: "PASSWORD_RESET",
-      tokenHash,
-      expiresAt,
-    },
-  });
+  const token =
+    await db.oneTimeToken.create({
+      data: {
+        userId: user.id,
+        purpose:
+          "PASSWORD_RESET",
+        tokenHash,
+        expiresAt,
+      },
+    });
 
   try {
     await sendPasswordResetEmail(
@@ -96,19 +191,30 @@ export default async function handler(
         id: token.id,
       },
       data: {
-        usedAt: new Date(),
+        usedAt:
+          new Date(),
       },
     });
 
     await db.auditEvent.create({
       data: {
         actorType: "USER",
-        actorUserId: user.id,
-        action: "PASSWORD_RESET_EMAIL_FAILED",
-        entityType: "OneTimeToken",
-        entityId: token.id,
-        ipAddress: getClientIp(request),
-        userAgent: getUserAgent(request),
+        actorUserId:
+          user.id,
+        action:
+          "PASSWORD_RESET_EMAIL_FAILED",
+        entityType:
+          "OneTimeToken",
+        entityId:
+          token.id,
+        ipAddress:
+          getClientIp(
+            request,
+          ),
+        userAgent:
+          getUserAgent(
+            request,
+          ),
       },
     });
 
@@ -118,12 +224,22 @@ export default async function handler(
   await db.auditEvent.create({
     data: {
       actorType: "USER",
-      actorUserId: user.id,
-      action: "PASSWORD_RESET_REQUESTED",
-      entityType: "OneTimeToken",
-      entityId: token.id,
-      ipAddress: getClientIp(request),
-      userAgent: getUserAgent(request),
+      actorUserId:
+        user.id,
+      action:
+        "PASSWORD_RESET_REQUESTED",
+      entityType:
+        "OneTimeToken",
+      entityId:
+        token.id,
+      ipAddress:
+        getClientIp(
+          request,
+        ),
+      userAgent:
+        getUserAgent(
+          request,
+        ),
     },
   });
 
