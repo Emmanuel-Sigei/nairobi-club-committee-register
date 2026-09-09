@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Architecture Freeze Pass C2B implemented; final freeze verification remains.
+ARCHITECTURE FROZEN - approved with documented Prisma CLI/tooling security exception; infrastructure provisioning and runtime validation remain.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -212,3 +212,29 @@ Architecture Freeze Pass C2B implemented; final freeze verification remains.
 - [ ] Final architecture freeze verification.
 - [ ] Production dependency audit review.
 - [ ] Neon / Zoho / R2 / Vercel infrastructure phase.
+## Final Architecture Freeze
+
+Status: APPROVED WITH DOCUMENTED TOOLING SECURITY EXCEPTION
+
+Application architecture and build validation completed successfully.
+
+Passed:
+- Architecture structural verification.
+- Prisma schema validation.
+- Prisma client generation.
+- Full repository ESLint.
+- Client TypeScript validation.
+- API TypeScript validation.
+- Production Vite build.
+- Dependency provenance and runtime-reachability review.
+
+Security exception:
+- npm audit reports HIGH findings in transitive dependencies under the Prisma CLI/tooling chain.
+- The findings are documented in docs/2026-09-09-dependency-security-review.md.
+- No vulnerable mysql2 or deepmerge-ts application-source usage was identified.
+- No forced dependency override or Prisma downgrade was applied.
+- The exception must be reviewed again before production deployment.
+
+Architecture is frozen.
+
+Remaining work is infrastructure provisioning, migrations, provider configuration, focused automated governance tests, and end-to-end runtime/UAT validation.
