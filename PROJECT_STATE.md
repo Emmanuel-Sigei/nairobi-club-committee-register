@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Architecture Freeze Pass B1 complete at code level; Pass B2 UI/document finalization remains.
+Architecture Freeze Pass B2 complete at code level; final read-only cross-stage audit remains before live infrastructure setup.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -143,3 +143,24 @@ Architecture Freeze Pass B1 complete at code level; Pass B2 UI/document finaliza
 - [~] R2 MIME fallback and deletion helper implemented; version concurrency/orphan completion cleanup remains for Pass B2.
 - [x] Immutable AuditEvent/AttendanceCorrection/COI-revision PostgreSQL trigger SQL prepared but not applied.
 - [ ] Final whole-repo architecture audit and code gates.
+## Architecture Freeze Pass B2
+
+- [x] Authenticated meeting QR route implemented.
+- [x] QR opens the normal authenticated meeting route and does not bypass attendance authorization.
+- [x] General committee documents UI mounted against the secured document API.
+- [x] Browser MIME fallback implemented for supported file extensions.
+- [x] Document version allocation uses Serializable transactions with bounded conflict retry.
+- [x] Failed document persistence triggers best-effort R2 orphan cleanup.
+- [x] No public R2 URLs introduced.
+- [x] Immutable governance SQL prepared separately and not applied.
+- [x] Zoho Calendar refresh-token architecture implemented.
+- [x] Zoho Mail refresh-token architecture implemented.
+- [x] Deactivation revokes sessions, ends active memberships and reconciles future meeting attendees when Calendar is configured.
+- [x] No database migration applied during architecture freeze.
+- [x] No live Zoho/R2 runtime operation performed during architecture freeze.
+- [ ] Final read-only cross-stage audit against the original build brief.
+- [ ] Neon migration and runtime validation.
+- [ ] Zoho Mail OAuth credential/runtime validation.
+- [ ] Zoho Calendar OAuth credential/runtime validation.
+- [ ] Cloudflare R2 bucket/CORS/runtime validation.
+- [ ] Vercel environment and deployment validation.

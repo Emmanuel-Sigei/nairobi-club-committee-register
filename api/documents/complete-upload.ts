@@ -2,6 +2,9 @@ import { getAuthenticatedUser } from "../_lib/auth";
 import { writeAuditEvent } from "../_lib/audit";
 import { getDb } from "../_lib/db";
 import {
+  createDocumentVersion,
+} from "../_lib/document-version";
+import {
   isZohoMailConfigured,
   sendDocumentAddedNotification,
 } from "../_lib/email";
@@ -16,6 +19,7 @@ import {
 
 } from "../_lib/document-utils";
 import {
+  deleteR2Object,
   headR2Object,
   isR2Configured,
 } from "../_lib/r2";
@@ -258,75 +262,42 @@ export default async function handler(
         meetingId,
       );
 
-    const result =
-      await getDb().$transaction(
-        async (tx) => {
-          let document =
-            await tx.document.findUnique({
-              where: {
-                committeeId_scopeKey_titleKey:
-                  {
-                    committeeId,
-                    scopeKey,
-                    titleKey,
-                  },
-              },
-            });
+    let result;
 
-          if (!document) {
-            document =
-              await tx.document.create({
-                data: {
-                  committeeId,
-                  meetingId:
-                    meetingId ?? null,
-                  scopeKey,
-                  title,
-                  titleKey,
-                  createdById:
-                    context.user.id,
-                },
-              });
-          }
+    try {
+      result =
+        await createDocumentVersion({
+          committeeId,
+          meetingId,
+          scopeKey,
+          title,
+          titleKey,
+          fileName,
+          objectKey,
+          contentType,
+          sizeBytes,
+          userId:
+            context.user.id,
+        });
+    } catch (persistenceError) {
+      /*
+       * The browser upload has already completed at this stage.
+       * If persistence fails, the object is not a valid governed
+       * DocumentVersion and should be removed from R2.
+       */
+      try {
+        await deleteR2Object(
+          objectKey,
+        );
+      } catch (cleanupError) {
+        console.error(
+          "DOCUMENT_ORPHAN_CLEANUP_FAILED",
+          cleanupError,
+        );
+      }
 
-          const latest =
-            await tx.documentVersion.findFirst({
-              where: {
-                documentId:
-                  document.id,
-              },
-              orderBy: {
-                version: "desc",
-              },
-              select: {
-                version: true,
-              },
-            });
-
-          const version =
-            await tx.documentVersion.create({
-              data: {
-                documentId:
-                  document.id,
-                version:
-                  (latest?.version ??
-                    0) + 1,
-                fileName,
-                objectKey,
-                contentType,
-                sizeBytes,
-                uploadedById:
-                  context.user.id,
-              },
-            });
-
-          return {
-            document,
-            version,
-          };
-        },
-      );
-
+      throw persistenceError;
+    }
     await writeAuditEvent({
       request,
       context,
