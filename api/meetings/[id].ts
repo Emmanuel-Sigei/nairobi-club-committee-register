@@ -130,12 +130,13 @@ async function getMeeting(
 
 async function getMeetingRecipients(
   committeeId: string,
+  at: Date,
 ) {
   const memberships = await getDb().membership.findMany({
     where: {
       committeeId,
       startDate: {
-        lte: new Date(),
+        lte: at,
       },
       OR: [
         {
@@ -143,7 +144,7 @@ async function getMeetingRecipients(
         },
         {
           endDate: {
-            gte: new Date(),
+            gte: at,
           },
         },
       ],
@@ -263,6 +264,12 @@ async function updateMeeting(
       eventUid,
     );
 
+    const recipients =
+      await getMeetingRecipients(
+        existing.committeeId,
+        startAt,
+      );
+
     await updateCalendarEvent({
       calendarId,
       eventUid,
@@ -272,31 +279,11 @@ async function updateMeeting(
       endAt,
       timezone,
       location,
-      attendees: providerSnapshot.resource.attendees
-        && Array.isArray(providerSnapshot.resource.attendees)
-        ? providerSnapshot.resource.attendees
-            .map((attendee) => {
-              if (
-                typeof attendee !== "object" ||
-                attendee === null ||
-                typeof (attendee as Record<string, unknown>).email !== "string"
-              ) {
-                return null;
-              }
-
-              return {
-                email: String(
-                  (attendee as Record<string, unknown>).email,
-                ),
-              };
-            })
-            .filter(
-              (
-                attendee,
-              ): attendee is { email: string } =>
-                attendee !== null,
-            )
-        : [],
+      attendees: recipients.map(
+        (recipient) => ({
+          email: recipient.email,
+        }),
+      ),
     });
 
     let updatedMeeting;
@@ -441,9 +428,6 @@ async function updateMeeting(
 
     if (isZohoMailConfigured()) {
       try {
-        const recipients = await getMeetingRecipients(
-          existing.committeeId,
-        );
 
         await sendMeetingNotification(
           recipients,
@@ -689,9 +673,12 @@ async function cancelMeeting(
 
     if (isZohoMailConfigured()) {
       try {
-        const recipients = await getMeetingRecipients(
-          existing.committeeId,
-        );
+
+        const recipients =
+          await getMeetingRecipients(
+            existing.committeeId,
+            existing.startAt,
+          );
 
         await sendMeetingNotification(
           recipients,

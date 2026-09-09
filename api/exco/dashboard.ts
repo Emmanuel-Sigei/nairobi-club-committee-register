@@ -90,14 +90,20 @@ export default async function handler(
       },
     }),
 
-    getDb()
-      .meetingAttendance
-      .groupBy({
-        by: ["status"],
-        _count: {
-          _all: true,
+    getDb().meetingAttendance.findMany({
+      select: {
+        status: true,
+        corrections: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+          select: {
+            status: true,
+          },
         },
-      }),
+      },
+    }),
 
     getDb().document.count(),
 
@@ -149,10 +155,15 @@ export default async function handler(
     Record<string, number> = {};
 
   for (
-    const group of attendanceGroups
+    const record of attendanceGroups
   ) {
-    attendanceCounts[group.status] =
-      group._count._all;
+    const status =
+      record.corrections[0]?.status ??
+      record.status;
+
+    attendanceCounts[status] =
+      (attendanceCounts[status] ?? 0) +
+      1;
   }
 
   let declarationNotSubmitted = 0;

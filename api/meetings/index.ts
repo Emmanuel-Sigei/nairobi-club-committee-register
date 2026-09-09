@@ -119,7 +119,7 @@ async function listMeetings(request: Request) {
   const meetings = await getDb().meeting.findMany({
     where: {
       ...(committeeIds ? { committeeId: { in: committeeIds } } : {}),
-      ...(status === "SCHEDULED" || status === "CANCELLED"
+      ...(status === "SCHEDULED" || status === "CLOSED" || status === "CANCELLED"
         ? { status }
         : {}),
     },
@@ -181,8 +181,6 @@ async function createMeeting(request: Request) {
       throw new Error("endAt must be later than startAt.");
     }
 
-    const now = new Date();
-
     const committee = await getDb().committee.findUnique({
       where: {
         id: committeeId,
@@ -190,8 +188,8 @@ async function createMeeting(request: Request) {
       include: {
         memberships: {
           where: {
-            startDate: { lte: now },
-            OR: [{ endDate: null }, { endDate: { gte: now } }],
+            startDate: { lte: startAt },
+            OR: [{ endDate: null }, { endDate: { gte: startAt } }],
             user: {
               isActive: true,
             },

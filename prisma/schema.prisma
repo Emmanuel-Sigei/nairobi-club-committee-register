@@ -100,7 +100,8 @@ model User {
   cancelledMeetings  Meeting[]           @relation("MeetingCancelledBy")
   closedMeetings     Meeting[]           @relation("MeetingClosedBy")
   attendanceRecords  MeetingAttendance[] @relation("AttendanceUser")
-  markedAttendance   MeetingAttendance[] @relation("AttendanceMarkedBy")
+  markedAttendance   MeetingAttendance[] @relation("AttendanceMarkedBy")
+  attendanceCorrections AttendanceCorrection[] @relation("AttendanceCorrectionCorrectedBy")
   createdDocuments         Document[]          @relation("DocumentCreatedBy")
   uploadedDocumentVersions DocumentVersion[]   @relation("DocumentVersionUploadedBy")
   conflictDeclarations MeetingConflictOfInterest[] @relation("COIUser")
@@ -196,10 +197,29 @@ model MeetingAttendance {
   meeting          Meeting          @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   user             User             @relation("AttendanceUser", fields: [userId], references: [id], onDelete: Restrict)
   markedBy         User?            @relation("AttendanceMarkedBy", fields: [markedById], references: [id], onDelete: SetNull)
+  corrections      AttendanceCorrection[]
+
   @@unique([meetingId, userId])
   @@index([meetingId, status])
   @@index([userId, markedAt])
   @@index([source])
+}
+
+model AttendanceCorrection {
+  id            String           @id @default(cuid())
+  attendanceId  String
+  status        AttendanceStatus
+  source        AttendanceSource @default(ADMIN)
+  reason        String
+  correctedById String
+  createdAt     DateTime         @default(now())
+
+  attendance    MeetingAttendance @relation(fields: [attendanceId], references: [id], onDelete: Cascade)
+  correctedBy   User              @relation("AttendanceCorrectionCorrectedBy", fields: [correctedById], references: [id], onDelete: Restrict)
+
+  @@index([attendanceId, createdAt])
+  @@index([correctedById])
+  @@index([status])
 }
 
 model MeetingConflictOfInterest {

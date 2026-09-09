@@ -1,6 +1,12 @@
 import { getAuthenticatedUser } from "../_lib/auth";
 import { getDb } from "../_lib/db";
 import {
+  currentAttendanceMarkedAt,
+  currentAttendanceReason,
+  currentAttendanceSource,
+  currentAttendanceStatus,
+} from "../_lib/attendance-current";
+import {
   canViewGovernance,
 } from "../_lib/governance";
 import {
@@ -198,6 +204,12 @@ async function attendanceRows():
   const records =
     await getDb().meetingAttendance.findMany({
       include: {
+        corrections: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
         user: {
           select: {
             id: true,
@@ -245,14 +257,14 @@ async function attendanceRows():
       email:
         record.user.email,
       status:
-        record.status,
+        currentAttendanceStatus(record),
       source:
-        record.source,
+        currentAttendanceSource(record),
       reason:
-        record.reason ?? "",
+        currentAttendanceReason(record),
       markedAt:
         formatDate(
-          record.markedAt,
+          currentAttendanceMarkedAt(record),
         ),
     }),
   );
@@ -382,6 +394,12 @@ async function absenceRows():
   const records =
     await getDb().meetingAttendance.findMany({
       include: {
+        corrections: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
         user: {
           select: {
             id: true,
@@ -418,6 +436,9 @@ async function absenceRows():
     new Map<string, Summary>();
 
   for (const record of records) {
+    const effectiveStatus =
+      currentAttendanceStatus(record);
+
     const key =
       `${record.meeting.committee.id}:` +
       record.user.id;
@@ -451,42 +472,34 @@ async function absenceRows():
     summary.meetings += 1;
 
     if (
-      record.status ===
-      "PRESENT"
+      effectiveStatus === "PRESENT"
     ) {
       summary.present += 1;
     }
 
     if (
-      record.status ===
-        "APOLOGY" ||
-      record.status ===
-        "APOLOGY_DRAFT"
+      effectiveStatus === "APOLOGY" ||
+      effectiveStatus === "APOLOGY_DRAFT"
     ) {
       summary.apologies += 1;
     }
 
     if (
-      record.status ===
-      "EXCUSED"
+      effectiveStatus === "EXCUSED"
     ) {
       summary.excused += 1;
     }
 
     if (
-      record.status ===
-        "ABSENT" ||
-      record.status ===
-        "ABSENT_NO_APOLOGY"
+      effectiveStatus === "ABSENT" ||
+      effectiveStatus === "ABSENT_NO_APOLOGY"
     ) {
       summary.absent += 1;
     }
 
     if (
-      record.status ===
-        "ABSENT_NO_APOLOGY" ||
-      record.status ===
-        "ABSENT"
+      effectiveStatus === "ABSENT_NO_APOLOGY" ||
+      effectiveStatus === "ABSENT"
     ) {
       summary.unexplainedAbsence += 1;
     }
