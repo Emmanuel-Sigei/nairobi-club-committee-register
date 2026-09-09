@@ -56,7 +56,7 @@ export function documentScopeKey(
 export function safeObjectFileName(fileName: string): string {
   const result = fileName
     .normalize("NFKD")
-    .replace(/[^\w.\-]+/g, "-")
+    .replace(/[^\w.-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^[-.]+|[-.]+$/g, "")
     .slice(0, 160);

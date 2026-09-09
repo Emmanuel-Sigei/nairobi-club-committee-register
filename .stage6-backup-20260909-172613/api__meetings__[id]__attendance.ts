@@ -4,11 +4,7 @@ import { CalendarNotConfiguredError, getCalendarEventSnapshot } from "../../_lib
 import { getDb } from "../../_lib/db";
 import { error, json, readJson } from "../../_lib/http";
 import { canViewCommittee } from "../../_lib/permissions";
-import {
-  isZohoMailConfigured,
-  sendApologyConfirmation,
-  sendAttendanceCorrectionNotification,
-} from "../../_lib/email";
+import { isZohoMailConfigured, sendApologyConfirmation, sendAttendanceCorrectionNotification } from "../../_lib/email";
 
 const SYNC_STALE_MS = 5 * 60 * 1000;
 type Action = "check-in" | "apology" | "mark" | "confirm-draft" | "reject-draft" | "sync" | "close";
@@ -132,45 +128,7 @@ async function handleWrite(request: Request, meetingId: string) {
 
     return getAttendanceResponse(request, meetingId, false);
   }
-  if (meeting.status === "CLOSED") { if (action !== "mark" || context.user.role !== "ADMIN") return error("Attendance records are locked because this meeting is closed.", 409); const correctionReason = optionalString(body.correctionReason); if (!correctionReason) return error("A reason is required for a post-close correction.", 400); if (!(await ensureEligible(meeting, requestedUserId))) return error("The selected user was not a member of this committee for this meeting.", 400); const status = parseStatus(body.status); const current = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: requestedUserId } } }); if (!current) return error("No attendance record exists to correct.", 404); await getDb().meetingAttendance.update({ where: { id: current.id }, data: { status, source: "ADMIN", reason: correctionReason, markedAt: new Date(), markedById: context.user.id } }); await writeAuditEvent({ request, context, action: "ATTENDANCE_CORRECTED", entityType: "MeetingAttendance", entityId: current.id, metadata: { meetingId, userId: requestedUserId, previousStatus: current.status, previousSource: current.source, previousReason: current.reason, correctedStatus: status, correctionReason } }); 
-    if (isZohoMailConfigured()) {
-      const correctedMember = await getDb().user.findUnique({
-        where: {
-          id: requestedUserId,
-        },
-        select: {
-          email: true,
-          name: true,
-        },
-      });
-
-      if (correctedMember) {
-        try {
-          await sendAttendanceCorrectionNotification(
-            correctedMember.email,
-            correctedMember.name,
-            {
-              title: meeting.title,
-              committeeName: meeting.committee.name,
-              startAt: meeting.startAt,
-              timezone: meeting.timezone,
-              meetingId: meeting.id,
-            },
-            {
-              previousStatus: current.status,
-              correctedStatus: status,
-              correctionReason,
-            },
-          );
-        } catch (mailError) {
-          console.error(
-            "ATTENDANCE_CORRECTION_EMAIL_FAILED",
-            mailError,
-          );
-        }
-      }
-    }
-return getAttendanceResponse(request, meetingId, false); }
+  if (meeting.status === "CLOSED") { if (action !== "mark" || context.user.role !== "ADMIN") return error("Attendance records are locked because this meeting is closed.", 409); const correctionReason = optionalString(body.correctionReason); if (!correctionReason) return error("A reason is required for a post-close correction.", 400); if (!(await ensureEligible(meeting, requestedUserId))) return error("The selected user was not a member of this committee for this meeting.", 400); const status = parseStatus(body.status); const current = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: requestedUserId } } }); if (!current) return error("No attendance record exists to correct.", 404); await getDb().meetingAttendance.update({ where: { id: current.id }, data: { status, source: "ADMIN", reason: correctionReason, markedAt: new Date(), markedById: context.user.id } }); await writeAuditEvent({ request, context, action: "ATTENDANCE_CORRECTED", entityType: "MeetingAttendance", entityId: current.id, metadata: { meetingId, userId: requestedUserId, previousStatus: current.status, previousSource: current.source, previousReason: current.reason, correctedStatus: status, correctionReason } }); return getAttendanceResponse(request, meetingId, false); }
   if (action === "check-in") { if (requestedUserId !== context.user.id) return error("You can only check yourself in.", 403); if (!(await ensureEligible(meeting, context.user.id))) return error("You are not an eligible committee member for this meeting.", 403); const existing = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: context.user.id } } }); if (existing?.status === "APOLOGY") return error("Your in-app apology is already recorded and cannot be replaced by check-in.", 409); await upsertAttendance(meetingId, context.user.id, "PRESENT", "SELF", context.user.id); await writeAuditEvent({ request, context, action: "ATTENDANCE_CHECKED_IN", entityType: "MeetingAttendance", entityId: existing?.id, metadata: { meetingId, userId: context.user.id, status: "PRESENT", source: "SELF" } }); return getAttendanceResponse(request, meetingId, false); }
   if (action === "apology") { if (requestedUserId !== context.user.id) return error("You can only submit your own apology.", 403); if (!(await ensureEligible(meeting, context.user.id))) return error("You are not an eligible committee member for this meeting.", 403); if (new Date() >= meeting.startAt) return error("Apologies must be submitted before the meeting starts.", 409); const existing = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: context.user.id } } }); if (existing && existing.source === "SELF") return error("An attendance record already exists for this meeting.", 409); const record = await upsertAttendance(meetingId, context.user.id, "APOLOGY", "SELF", context.user.id, reason); await writeAuditEvent({ request, context, action: "APOLOGY_SUBMITTED", entityType: "MeetingAttendance", entityId: record.id, metadata: { meetingId, userId: context.user.id, status: "APOLOGY", source: "SELF", reason: reason ?? null } }); const warnings: string[] = []; if (isZohoMailConfigured()) { try { await sendApologyConfirmation(context.user.email, context.user.name, { title: meeting.title, committeeName: meeting.committee.name, startAt: meeting.startAt, timezone: meeting.timezone, meetingId }, reason); } catch (mailError) { console.error("Apology confirmation email failed.", mailError); warnings.push("The apology was recorded, but the confirmation email could not be delivered."); } } else warnings.push("Zoho Mail is not configured; apology confirmation email was skipped."); const response = await getAttendanceResponse(request, meetingId, false); if (!response.ok || warnings.length === 0) return response; const payload = await response.json(); return json({ ...payload, warnings }); }
   if (action === "confirm-draft") { if (context.user.role !== "ADMIN") return error("Administrator access required.", 403); const draft = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: requestedUserId } } }); if (!draft || draft.status !== "APOLOGY_DRAFT") return error("No pending apology draft exists for this member.", 404); await getDb().meetingAttendance.update({ where: { id: draft.id }, data: { status: "APOLOGY", source: "ADMIN", markedAt: new Date(), markedById: context.user.id } }); await writeAuditEvent({ request, context, action: "APOLOGY_DRAFT_CONFIRMED", entityType: "MeetingAttendance", entityId: draft.id, metadata: { meetingId, userId: requestedUserId, previousStatus: draft.status } }); return getAttendanceResponse(request, meetingId, false); }
