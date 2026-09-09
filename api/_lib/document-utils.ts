@@ -92,3 +92,79 @@ export function validateDocumentContentType(value: unknown): string {
 
   return contentType;
 }
+
+const CONTENT_TYPE_BY_EXTENSION:
+  Record<string, string> = {
+    ".pdf":
+      "application/pdf",
+    ".doc":
+      "application/msword",
+    ".docx":
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls":
+      "application/vnd.ms-excel",
+    ".xlsx":
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ".ppt":
+      "application/vnd.ms-powerpoint",
+    ".pptx":
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    ".csv":
+      "text/csv",
+    ".txt":
+      "text/plain",
+    ".jpg":
+      "image/jpeg",
+    ".jpeg":
+      "image/jpeg",
+    ".png":
+      "image/png",
+  };
+
+export function inferDocumentContentType(
+  fileName: string,
+  suppliedContentType?: unknown,
+): string {
+  const supplied =
+    typeof suppliedContentType ===
+      "string"
+      ? suppliedContentType
+          .trim()
+          .toLowerCase()
+      : "";
+
+  if (
+    supplied &&
+    supplied !==
+      "application/octet-stream"
+  ) {
+    return validateDocumentContentType(
+      supplied,
+    );
+  }
+
+  const dot =
+    fileName.lastIndexOf(
+      ".",
+    );
+
+  const extension =
+    dot >= 0
+      ? fileName
+          .slice(dot)
+          .toLowerCase()
+      : "";
+
+  const inferred =
+    CONTENT_TYPE_BY_EXTENSION[
+      extension
+    ];
+
+  if (!inferred) {
+    throw new Error(
+      "The browser did not provide a supported document type and the file extension could not be recognized.",
+    );
+  }
+
+  return inferred;
+}

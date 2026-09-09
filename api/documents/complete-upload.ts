@@ -7,12 +7,13 @@ import {
 } from "../_lib/email";
 import {
   documentScopeKey,
+  inferDocumentContentType,
   documentTitleKey,
   normalizeDocumentTitle,
   optionalDocumentString,
   parseDocumentSize,
   requiredDocumentString,
-  validateDocumentContentType,
+
 } from "../_lib/document-utils";
 import {
   headR2Object,
@@ -101,7 +102,8 @@ export default async function handler(
       );
 
     const contentType =
-      validateDocumentContentType(
+      inferDocumentContentType(
+        fileName,
         body.contentType,
       );
 

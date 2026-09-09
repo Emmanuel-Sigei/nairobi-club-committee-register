@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
@@ -114,5 +115,23 @@ export async function createSignedDocumentUrl(input: {
       ResponseContentType: input.contentType,
     }),
     { expiresIn: input.expiresIn ?? 60 },
+  );
+}
+
+export async function deleteR2Object(
+  key: string,
+): Promise<void> {
+  const config =
+    getConfig();
+
+  await client(
+    config,
+  ).send(
+    new DeleteObjectCommand({
+      Bucket:
+        config.bucket,
+      Key:
+        key,
+    }),
   );
 }

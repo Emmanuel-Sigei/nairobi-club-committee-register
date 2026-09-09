@@ -1,6 +1,9 @@
+import {
+  getZohoAccessToken,
+  isZohoServiceConfigured,
+} from "./zoho-oauth";
 interface ZohoMailConfig {
   apiBaseUrl: string;
-  accessToken: string;
   accountId: string;
   fromAddress: string;
   fromName: string;
@@ -14,26 +17,29 @@ interface SendMailInput {
 
 function getConfig(): ZohoMailConfig {
   const apiBaseUrl =
-    process.env.ZOHO_MAIL_API_BASE_URL?.trim();
-
-  const accessToken =
-    process.env.ZOHO_MAIL_ACCESS_TOKEN?.trim();
+    process.env.ZOHO_MAIL_API_BASE_URL
+      ?.trim();
 
   const accountId =
-    process.env.ZOHO_MAIL_ACCOUNT_ID?.trim();
+    process.env.ZOHO_MAIL_ACCOUNT_ID
+      ?.trim();
 
   const fromAddress =
-    process.env.ZOHO_MAIL_FROM_ADDRESS?.trim();
+    process.env.ZOHO_MAIL_FROM_ADDRESS
+      ?.trim();
 
   const fromName =
-    process.env.ZOHO_MAIL_FROM_NAME?.trim() ||
+    process.env.ZOHO_MAIL_FROM_NAME
+      ?.trim() ||
     "Nairobi Club";
 
   if (
     !apiBaseUrl ||
-    !accessToken ||
     !accountId ||
-    !fromAddress
+    !fromAddress ||
+    !isZohoServiceConfigured(
+      "MAIL",
+    )
   ) {
     throw new Error(
       "Zoho Mail configuration is incomplete.",
@@ -41,8 +47,11 @@ function getConfig(): ZohoMailConfig {
   }
 
   return {
-    apiBaseUrl: apiBaseUrl.replace(/\/+$/, ""),
-    accessToken,
+    apiBaseUrl:
+      apiBaseUrl.replace(
+        /\/+$/,
+        "",
+      ),
     accountId,
     fromAddress,
     fromName,
@@ -55,10 +64,15 @@ export function assertZohoMailConfigured(): void {
 
 export function isZohoMailConfigured(): boolean {
   return Boolean(
-    process.env.ZOHO_MAIL_API_BASE_URL?.trim() &&
-      process.env.ZOHO_MAIL_ACCESS_TOKEN?.trim() &&
-      process.env.ZOHO_MAIL_ACCOUNT_ID?.trim() &&
-      process.env.ZOHO_MAIL_FROM_ADDRESS?.trim(),
+    process.env.ZOHO_MAIL_API_BASE_URL
+      ?.trim() &&
+      process.env.ZOHO_MAIL_ACCOUNT_ID
+        ?.trim() &&
+      process.env.ZOHO_MAIL_FROM_ADDRESS
+        ?.trim() &&
+      isZohoServiceConfigured(
+        "MAIL",
+      ),
   );
 }
 
@@ -78,13 +92,18 @@ async function sendZohoMail({
 }: SendMailInput): Promise<void> {
   const config = getConfig();
 
+  const accessToken =
+    await getZohoAccessToken(
+      "MAIL",
+    );
+
   const response = await fetch(
     `${config.apiBaseUrl}/accounts/${encodeURIComponent(config.accountId)}/messages`,
     {
       method: "POST",
       headers: {
         Authorization:
-          `Zoho-oauthtoken ${config.accessToken}`,
+          `Zoho-oauthtoken ${accessToken}`,
         "Content-Type": "application/json",
         Accept: "application/json",
       },

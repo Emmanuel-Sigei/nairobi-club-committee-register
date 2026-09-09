@@ -3,12 +3,13 @@ import { getAuthenticatedUser } from "../_lib/auth";
 import { getDb } from "../_lib/db";
 import { error, json, readJson } from "../_lib/http";
 import {
+  inferDocumentContentType,
   normalizeDocumentTitle,
   optionalDocumentString,
   parseDocumentSize,
   requiredDocumentString,
   safeObjectFileName,
-  validateDocumentContentType,
+
 } from "../_lib/document-utils";
 import {
   createSignedUploadUrl,
@@ -64,7 +65,8 @@ export default async function handler(
       body.fileName,
       "fileName",
     );
-    const contentType = validateDocumentContentType(
+    const contentType = inferDocumentContentType(
+      fileName,
       body.contentType,
     );
     const sizeBytes = parseDocumentSize(body.sizeBytes);

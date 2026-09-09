@@ -1,3 +1,8 @@
+import {
+  getZohoAccessToken,
+  isZohoServiceConfigured,
+} from "./zoho-oauth";
+
 export interface CalendarAttendee {
   email: string;
 }
@@ -21,7 +26,6 @@ export interface CalendarEventSnapshot {
 
 interface ZohoCalendarConfig {
   apiBaseUrl: string;
-  accessToken: string;
 }
 
 interface ZohoEventResponse {
@@ -36,17 +40,12 @@ export class CalendarNotConfiguredError extends Error {
 }
 
 function getConfig(): ZohoCalendarConfig {
-  const accessToken = process.env.ZOHO_CALENDAR_ACCESS_TOKEN?.trim();
-
-  if (!accessToken) {
-    throw new CalendarNotConfiguredError();
-  }
-
   return {
     apiBaseUrl:
-      process.env.ZOHO_CALENDAR_API_BASE_URL?.trim().replace(/\/+$/, "") ||
+      process.env.ZOHO_CALENDAR_API_BASE_URL
+        ?.trim()
+        .replace(/\/+$/, "") ||
       "https://calendar.zoho.com/api/v1",
-    accessToken,
   };
 }
 
@@ -84,20 +83,32 @@ async function requestZoho(
   url: string,
   init: RequestInit,
 ): Promise<unknown> {
-  const config = getConfig();
+  if (!isCalendarConfigured()) {
+    throw new CalendarNotConfiguredError();
+  }
+
+  const accessToken =
+    await getZohoAccessToken("CALENDAR");
 
   const response = await fetch(url, {
     ...init,
     headers: {
-      Authorization: `Zoho-oauthtoken ${config.accessToken}`,
+      Authorization:
+        `Zoho-oauthtoken ${accessToken}`,
       Accept: "application/json",
       ...(init.headers ?? {}),
     },
   });
 
   if (!response.ok) {
-    const body = await response.text().catch(() => "");
-    const suffix = body ? ` ${body.slice(0, 500)}` : "";
+    const body =
+      await response.text().catch(() => "");
+
+    const suffix =
+      body
+        ? ` ${body.slice(0, 500)}`
+        : "";
+
     throw new Error(
       `Zoho Calendar request failed with HTTP ${response.status}.${suffix}`,
     );
@@ -116,25 +127,42 @@ export async function getCalendarEventSnapshot(
     `${config.apiBaseUrl}/calendars/${encodeURIComponent(calendarId)}` +
     `/events/${encodeURIComponent(eventUid)}`;
 
-  const response = (await requestZoho(url, {
-    method: "GET",
-  })) as ZohoEventResponse;
+  const response =
+    (await requestZoho(url, {
+      method: "GET",
+    })) as ZohoEventResponse;
 
-  const event = response.events?.[0];
+  const event =
+    response.events?.[0];
 
   if (!event) {
-    throw new Error("Zoho Calendar did not return the requested event.");
+    throw new Error(
+      "Zoho Calendar did not return the requested event.",
+    );
   }
 
-  const uid = event.uid;
-  const etag = event.etag;
+  const uid =
+    event.uid;
 
-  if (typeof uid !== "string" || !uid) {
-    throw new Error("Zoho Calendar event snapshot is missing its UID.");
+  const etag =
+    event.etag;
+
+  if (
+    typeof uid !== "string" ||
+    !uid
+  ) {
+    throw new Error(
+      "Zoho Calendar event snapshot is missing its UID.",
+    );
   }
 
-  if (etag === undefined || etag === null) {
-    throw new Error("Zoho Calendar event snapshot is missing its etag.");
+  if (
+    etag === undefined ||
+    etag === null
+  ) {
+    throw new Error(
+      "Zoho Calendar event snapshot is missing its etag.",
+    );
   }
 
   return {
@@ -153,29 +181,49 @@ export async function createCalendarEvent(
     `${config.apiBaseUrl}/calendars/${encodeURIComponent(input.calendarId)}/events`,
   );
 
-  url.searchParams.set("eventdata", JSON.stringify(eventData(input)));
+  url.searchParams.set(
+    "eventdata",
+    JSON.stringify(
+      eventData(input),
+    ),
+  );
 
-  const response = (await requestZoho(url.toString(), {
-    method: "POST",
-  })) as ZohoEventResponse;
+  const response =
+    (await requestZoho(
+      url.toString(),
+      {
+        method: "POST",
+      },
+    )) as ZohoEventResponse;
 
-  const uid = response.events?.[0]?.uid;
+  const uid =
+    response.events?.[0]?.uid;
 
-  if (typeof uid !== "string" || !uid) {
-    throw new Error("Zoho Calendar did not return an event UID.");
+  if (
+    typeof uid !== "string" ||
+    !uid
+  ) {
+    throw new Error(
+      "Zoho Calendar did not return an event UID.",
+    );
   }
 
   return uid;
 }
 
 export async function updateCalendarEvent(
-  input: CalendarEventInput & { eventUid: string },
+  input:
+    CalendarEventInput & {
+      eventUid: string;
+    },
 ): Promise<void> {
   const config = getConfig();
-  const snapshot = await getCalendarEventSnapshot(
-    input.calendarId,
-    input.eventUid,
-  );
+
+  const snapshot =
+    await getCalendarEventSnapshot(
+      input.calendarId,
+      input.eventUid,
+    );
 
   const url = new URL(
     `${config.apiBaseUrl}/calendars/${encodeURIComponent(input.calendarId)}` +
@@ -191,12 +239,16 @@ export async function updateCalendarEvent(
     }),
   );
 
-  await requestZoho(url.toString(), {
-    method: "PUT",
-    headers: {
-      etag: snapshot.etag,
+  await requestZoho(
+    url.toString(),
+    {
+      method: "PUT",
+      headers: {
+        etag:
+          snapshot.etag,
+      },
     },
-  });
+  );
 }
 
 export async function restoreCalendarEvent(
@@ -206,27 +258,41 @@ export async function restoreCalendarEvent(
 ): Promise<void> {
   const config = getConfig();
 
-  const current = await getCalendarEventSnapshot(calendarId, eventUid);
+  const current =
+    await getCalendarEventSnapshot(
+      calendarId,
+      eventUid,
+    );
 
-  const restoredResource: Record<string, unknown> = {
-    ...resource,
-    uid: eventUid,
-    etag: current.etag,
-  };
+  const restoredResource:
+    Record<string, unknown> = {
+      ...resource,
+      uid: eventUid,
+      etag: current.etag,
+    };
 
   const url = new URL(
     `${config.apiBaseUrl}/calendars/${encodeURIComponent(calendarId)}` +
       `/events/${encodeURIComponent(eventUid)}`,
   );
 
-  url.searchParams.set("eventdata", JSON.stringify(restoredResource));
+  url.searchParams.set(
+    "eventdata",
+    JSON.stringify(
+      restoredResource,
+    ),
+  );
 
-  await requestZoho(url.toString(), {
-    method: "PUT",
-    headers: {
-      etag: current.etag,
+  await requestZoho(
+    url.toString(),
+    {
+      method: "PUT",
+      headers: {
+        etag:
+          current.etag,
+      },
     },
-  });
+  );
 }
 
 export async function deleteCalendarEvent(
@@ -234,7 +300,12 @@ export async function deleteCalendarEvent(
   eventUid: string,
 ): Promise<void> {
   const config = getConfig();
-  const snapshot = await getCalendarEventSnapshot(calendarId, eventUid);
+
+  const snapshot =
+    await getCalendarEventSnapshot(
+      calendarId,
+      eventUid,
+    );
 
   const url = new URL(
     `${config.apiBaseUrl}/calendars/${encodeURIComponent(calendarId)}` +
@@ -244,30 +315,45 @@ export async function deleteCalendarEvent(
   url.searchParams.set(
     "eventdata",
     JSON.stringify({
-      uid: eventUid,
-      etag: snapshot.etag,
+      uid:
+        eventUid,
+      etag:
+        snapshot.etag,
     }),
   );
 
-  await requestZoho(url.toString(), {
-    method: "DELETE",
-    headers: {
-      etag: snapshot.etag,
+  await requestZoho(
+    url.toString(),
+    {
+      method: "DELETE",
+      headers: {
+        etag:
+          snapshot.etag,
+      },
     },
-  });
+  );
 }
 
 export async function deleteCalendarEventWithSnapshot(
   calendarId: string,
   eventUid: string,
 ): Promise<CalendarEventSnapshot> {
-  const snapshot = await getCalendarEventSnapshot(calendarId, eventUid);
+  const snapshot =
+    await getCalendarEventSnapshot(
+      calendarId,
+      eventUid,
+    );
 
-  await deleteCalendarEvent(calendarId, eventUid);
+  await deleteCalendarEvent(
+    calendarId,
+    eventUid,
+  );
 
   return snapshot;
 }
 
 export function isCalendarConfigured(): boolean {
-  return Boolean(process.env.ZOHO_CALENDAR_ACCESS_TOKEN?.trim());
+  return isZohoServiceConfigured(
+    "CALENDAR",
+  );
 }

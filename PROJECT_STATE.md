@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Architecture Freeze Pass A complete at code level; Pass B operational integration/UI remediation remains.
+Architecture Freeze Pass B1 complete at code level; Pass B2 UI/document finalization remains.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -135,11 +135,11 @@ Architecture Freeze Pass A complete at code level; Pass B operational integratio
 - [x] CLOSED status supported by meeting list filtering.
 
 ### Pass B - remaining before architecture freeze
-- [ ] Deactivation reconciles future Zoho Calendar attendees.
-- [ ] Zoho Calendar OAuth refresh-token architecture.
-- [ ] Zoho Mail OAuth refresh-token architecture.
+- [x] Deactivation ends active memberships, revokes sessions and reconciles future Zoho Calendar attendees.
+- [x] Zoho Calendar refresh-token OAuth architecture implemented; live credentials deferred.
+- [x] Zoho Mail refresh-token OAuth architecture implemented; live credentials deferred.
 - [ ] Authenticated meeting QR/check-in presentation.
 - [ ] General committee documents UI.
-- [ ] R2 MIME fallback/concurrency/orphan-upload hardening.
-- [ ] Final immutable audit database hardening SQL prepared.
+- [~] R2 MIME fallback and deletion helper implemented; version concurrency/orphan completion cleanup remains for Pass B2.
+- [x] Immutable AuditEvent/AttendanceCorrection/COI-revision PostgreSQL trigger SQL prepared but not applied.
 - [ ] Final whole-repo architecture audit and code gates.
