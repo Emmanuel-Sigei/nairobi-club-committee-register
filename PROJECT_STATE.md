@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Architecture Freeze Pass B2 complete at code level; final read-only cross-stage audit remains before live infrastructure setup.
+Architecture Freeze Pass C1 implemented; Pass C2 remains before architecture freeze approval.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -164,3 +164,19 @@ Architecture Freeze Pass B2 complete at code level; final read-only cross-stage 
 - [ ] Zoho Calendar OAuth credential/runtime validation.
 - [ ] Cloudflare R2 bucket/CORS/runtime validation.
 - [ ] Vercel environment and deployment validation.
+## Architecture Freeze Pass C1
+
+- [x] Invitation delivery failure preserves immutable AuditEvent history.
+- [x] Failed invitation delivery records INVITATION_EMAIL_FAILED.
+- [x] Meeting eligibility respects account activity at the meeting time.
+- [x] Inactive users cannot receive new committee memberships.
+- [x] COI reads effective attendance including append-only corrections.
+- [x] Attendance corrected to PRESENT creates DECLARATION_NOT_SUBMITTED if required.
+- [x] Repeated attendance corrections audit the prior effective value.
+- [x] Admin force-close supported when Zoho RSVP sync fails, with mandatory reason and audit.
+- [x] Self attendance/apology controls shown only to Members.
+- [x] QR direct meeting route opens Meetings.
+- [x] Vercel meeting SPA rewrite prepared.
+- [x] Active App.tsx mojibake removed.
+- [ ] Pass C2 Admin management surfaces + in-app notifications.
+- [ ] Final architecture freeze audit.

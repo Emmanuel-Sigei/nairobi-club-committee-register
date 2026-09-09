@@ -55,6 +55,7 @@ export default async function handler(request: Request): Promise<Response> {
         getDb().committee.findUnique({ where: { id: committeeId } }),
       ]);
       if (!user) return error("User not found.", 404);
+      if (!user.isActive) return error("Inactive users cannot receive new committee memberships.", 409);
       if (!committee) return error("Committee not found.", 404);
       if (committee.archivedAt) return error("Archived committees cannot receive memberships.", 409);
 

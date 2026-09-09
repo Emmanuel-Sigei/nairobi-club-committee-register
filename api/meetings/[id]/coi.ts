@@ -1,5 +1,8 @@
 import { getAuthenticatedUser } from "../../_lib/auth";
 import { writeAuditEvent } from "../../_lib/audit";
+import {
+  currentAttendanceStatus,
+} from "../../_lib/attendance-current";
 import { getDb } from "../../_lib/db";
 import {
   isZohoMailConfigured,
@@ -116,6 +119,12 @@ async function isEligibleMember(
         committeeId: meeting.committeeId,
         startDate: { lte: meeting.startAt },
         OR: [{ endDate: null }, { endDate: { gte: meeting.startAt } }],
+        user: {
+          OR: [
+            { isActive: true },
+            { deactivatedAt: { gte: meeting.startAt } },
+          ],
+        },
       },
     }),
   );
@@ -133,25 +142,46 @@ async function isChairForMeeting(
         role: "CHAIR",
         startDate: { lte: meeting.startAt },
         OR: [{ endDate: null }, { endDate: { gte: meeting.startAt } }],
+        user: {
+          OR: [
+            { isActive: true },
+            { deactivatedAt: { gte: meeting.startAt } },
+          ],
+        },
       },
     }),
   );
 }
 
-async function isPresent(meetingId: string, userId: string) {
-  const attendance = await getDb().meetingAttendance.findUnique({
-    where: {
-      meetingId_userId: {
-        meetingId,
-        userId,
+async function isPresent(
+  meetingId: string,
+  userId: string,
+) {
+  const attendance =
+    await getDb().meetingAttendance.findUnique({
+      where: {
+        meetingId_userId: {
+          meetingId,
+          userId,
+        },
       },
-    },
-    select: {
-      status: true,
-    },
-  });
+      include: {
+        corrections: {
+          orderBy: {
+            createdAt:
+              "desc",
+          },
+          take: 1,
+        },
+      },
+    });
 
-  return attendance?.status === "PRESENT";
+  return (
+    attendance !== null &&
+    currentAttendanceStatus(
+      attendance,
+    ) === "PRESENT"
+  );
 }
 
 function validateAgendaReferences(
@@ -216,6 +246,12 @@ async function getRegister(request: Request, meetingId: string) {
       committeeId: meeting.committeeId,
       startDate: { lte: meeting.startAt },
       OR: [{ endDate: null }, { endDate: { gte: meeting.startAt } }],
+        user: {
+          OR: [
+            { isActive: true },
+            { deactivatedAt: { gte: meeting.startAt } },
+          ],
+        },
     },
     select: {
       userId: true,
@@ -268,22 +304,33 @@ async function getRegister(request: Request, meetingId: string) {
     ]),
   );
 
-  const attendance = await getDb().meetingAttendance.findMany({
-    where: {
-      meetingId,
-    },
-    select: {
-      userId: true,
-      status: true,
-    },
-  });
+  const attendance =
+    await getDb().meetingAttendance.findMany({
+      where: {
+        meetingId,
+      },
+      include: {
+        corrections: {
+          orderBy: {
+            createdAt:
+              "desc",
+          },
+          take: 1,
+        },
+      },
+    });
 
-  const attendanceByUser = new Map(
-    attendance.map((record) => [
-      record.userId,
-      record.status,
-    ]),
-  );
+  const attendanceByUser =
+    new Map(
+      attendance.map(
+        (record) => [
+          record.userId,
+          currentAttendanceStatus(
+            record,
+          ),
+        ],
+      ),
+    );
 
   const isAdmin = context.user.role === "ADMIN";
   const isExco = context.user.role === "EXCO_MANAGEMENT";

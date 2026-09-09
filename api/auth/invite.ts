@@ -494,25 +494,13 @@ export default async function handler(
     );
   } catch {
     /*
-     * Invitation delivery failed before the user can use the
-     * account. Remove the newly-created invitation atomically.
-     * The USER_INVITED audit event must be removed first because
-     * its actor/entity history was created inside this transaction
-     * solely for the failed invitation.
+     * Delivery failed before the invited account became usable.
+     * Remove the pending account data, but never delete governance
+     * audit history. USER_INVITED remains immutable and a second
+     * audit event records the delivery failure.
      */
     await db.$transaction(
       async (tx) => {
-        await tx.auditEvent.deleteMany({
-          where: {
-            action:
-              "USER_INVITED",
-            entityType:
-              "User",
-            entityId:
-              user.id,
-          },
-        });
-
         await tx.oneTimeToken.deleteMany({
           where: {
             userId:
@@ -536,8 +524,37 @@ export default async function handler(
       },
     );
 
+    await db.auditEvent.create({
+      data: {
+        actorType:
+          "USER",
+        actorUserId:
+          context.user.id,
+        action:
+          "INVITATION_EMAIL_FAILED",
+        entityType:
+          "User",
+        entityId:
+          user.id,
+        metadata: {
+          invitedEmail:
+            email,
+          cleanupCompleted:
+            true,
+        },
+        ipAddress:
+          getClientIp(
+            request,
+          ),
+        userAgent:
+          getUserAgent(
+            request,
+          ),
+      },
+    });
+
     return error(
-      "Invitation could not be sent. Please try again later.",
+      "Invitation could not be sent. The pending account was cleaned up and the failed delivery was retained in audit history. Please try again later.",
       503,
     );
   }
