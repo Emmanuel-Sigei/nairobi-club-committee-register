@@ -100,7 +100,9 @@ model User {
   cancelledMeetings  Meeting[]           @relation("MeetingCancelledBy")
   closedMeetings     Meeting[]           @relation("MeetingClosedBy")
   attendanceRecords  MeetingAttendance[] @relation("AttendanceUser")
-  markedAttendance   MeetingAttendance[] @relation("AttendanceMarkedBy")
+  markedAttendance   MeetingAttendance[] @relation("AttendanceMarkedBy")
+  createdDocuments         Document[]          @relation("DocumentCreatedBy")
+  uploadedDocumentVersions DocumentVersion[]   @relation("DocumentVersionUploadedBy")
   conflictDeclarations MeetingConflictOfInterest[] @relation("COIUser")
   coiRevisionsCreated MeetingConflictOfInterestRevision[] @relation("COIRevisionCreatedBy")
   @@index([role])
@@ -120,7 +122,8 @@ model Committee {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   memberships      Membership[]
-  meetings         Meeting[]
+  meetings         Meeting[]
+  documents        Document[]
   @@index([type])
   @@index([parentId])
   @@index([archivedAt])
@@ -169,7 +172,8 @@ model Meeting {
   cancelledBy      User?               @relation("MeetingCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
   closedBy         User?               @relation("MeetingClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   agendaItems      AgendaItem[]
-  attendance       MeetingAttendance[]
+  attendance       MeetingAttendance[]
+  documents         Document[]
   conflictDeclarations MeetingConflictOfInterest[]
   @@index([committeeId, startAt])
   @@index([status, startAt])
@@ -232,6 +236,47 @@ model MeetingConflictOfInterestRevision {
   @@index([status])
   @@index([source])
   @@index([createdById])
+}
+
+model Document {
+  id           String            @id @default(cuid())
+  committeeId  String
+  meetingId    String?
+  scopeKey     String
+  title        String
+  titleKey     String
+  createdById  String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  committee    Committee         @relation(fields: [committeeId], references: [id], onDelete: Restrict)
+  meeting      Meeting?          @relation(fields: [meetingId], references: [id], onDelete: Restrict)
+  createdBy    User              @relation("DocumentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  versions     DocumentVersion[]
+
+  @@unique([committeeId, scopeKey, titleKey])
+  @@index([committeeId, scopeKey])
+  @@index([meetingId])
+  @@index([createdById])
+}
+
+model DocumentVersion {
+  id           String    @id @default(cuid())
+  documentId   String
+  version      Int
+  fileName     String
+  objectKey    String    @unique
+  contentType  String
+  sizeBytes    Int
+  uploadedById String
+  createdAt    DateTime  @default(now())
+
+  document     Document  @relation(fields: [documentId], references: [id], onDelete: Restrict)
+  uploadedBy   User      @relation("DocumentVersionUploadedBy", fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@unique([documentId, version])
+  @@index([documentId, createdAt])
+  @@index([uploadedById])
 }
 model AgendaItem {
   id               String    @id @default(cuid())
