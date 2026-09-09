@@ -1,4 +1,4 @@
-﻿export interface CalendarAttendee {
+export interface CalendarAttendee {
   email: string;
 }
 
