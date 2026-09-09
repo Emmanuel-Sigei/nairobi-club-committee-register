@@ -48,11 +48,37 @@ export async function sendMeetingNotification(recipients: Array<{ email: string;
   const start = input.startAt.toLocaleString("en-KE", { dateStyle: "full", timeStyle: "short", timeZone: input.timezone });
   const end = input.endAt.toLocaleTimeString("en-KE", { hour: "2-digit", minute: "2-digit", timeZone: input.timezone });
   for (const recipient of recipients) {
-    await sendZohoMail({ toAddress: recipient.email, subject: `Nairobi Club: ${subjectPrefix} — ${input.title}`, content: `<p>Dear ${escapeHtml(recipient.name)},</p><p><strong>${escapeHtml(subjectPrefix)}</strong></p><p><strong>Committee:</strong> ${escapeHtml(input.committeeName)}</p><p><strong>Meeting:</strong> ${escapeHtml(input.title)}</p><p><strong>When:</strong> ${escapeHtml(start)} – ${escapeHtml(end)} (${escapeHtml(input.timezone)})</p><p><strong>Location:</strong> ${escapeHtml(input.location)}</p><p><a href="${appMeetingUrl}">Open meeting in the Committee Register</a></p><p>Regards,<br>Nairobi Club ICT</p>` });
+    await sendZohoMail({ toAddress: recipient.email, subject: `Nairobi Club: ${subjectPrefix} â€” ${input.title}`, content: `<p>Dear ${escapeHtml(recipient.name)},</p><p><strong>${escapeHtml(subjectPrefix)}</strong></p><p><strong>Committee:</strong> ${escapeHtml(input.committeeName)}</p><p><strong>Meeting:</strong> ${escapeHtml(input.title)}</p><p><strong>When:</strong> ${escapeHtml(start)} â€“ ${escapeHtml(end)} (${escapeHtml(input.timezone)})</p><p><strong>Location:</strong> ${escapeHtml(input.location)}</p><p><a href="${appMeetingUrl}">Open meeting in the Committee Register</a></p><p>Regards,<br>Nairobi Club ICT</p>` });
   }
 }
 export async function sendApologyConfirmation(email: string, name: string, meeting: { title: string; committeeName: string; startAt: Date; timezone: string; meetingId: string }, reason?: string): Promise<void> {
   const url = `${appUrl()}/meetings/${encodeURIComponent(meeting.meetingId)}`;
   const when = meeting.startAt.toLocaleString("en-KE", { dateStyle: "full", timeStyle: "short", timeZone: meeting.timezone });
-  await sendZohoMail({ toAddress: email, subject: `Nairobi Club: apology recorded — ${meeting.title}`, content: `<p>Dear ${escapeHtml(name)},</p><p>Your apology for the following committee meeting has been recorded in the Nairobi Club Committee Register:</p><p><strong>Committee:</strong> ${escapeHtml(meeting.committeeName)}<br><strong>Meeting:</strong> ${escapeHtml(meeting.title)}<br><strong>When:</strong> ${escapeHtml(when)}</p>${reason ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>` : ""}<p><a href="${url}">Open the meeting record</a></p><p>Regards,<br>Nairobi Club ICT</p>` });
+  await sendZohoMail({ toAddress: email, subject: `Nairobi Club: apology recorded â€” ${meeting.title}`, content: `<p>Dear ${escapeHtml(name)},</p><p>Your apology for the following committee meeting has been recorded in the Nairobi Club Committee Register:</p><p><strong>Committee:</strong> ${escapeHtml(meeting.committeeName)}<br><strong>Meeting:</strong> ${escapeHtml(meeting.title)}<br><strong>When:</strong> ${escapeHtml(when)}</p>${reason ? `<p><strong>Reason:</strong> ${escapeHtml(reason)}</p>` : ""}<p><a href="${url}">Open the meeting record</a></p><p>Regards,<br>Nairobi Club ICT</p>` });
+}
+
+export async function sendCoiCorrectionNotification(
+  email: string,
+  name: string,
+  meeting: {
+    title: string;
+    committeeName: string;
+    startAt: Date;
+    timezone: string;
+    meetingId: string;
+  },
+  correctionReason: string,
+): Promise<void> {
+  const url = `${appUrl()}/meetings/${encodeURIComponent(meeting.meetingId)}`;
+  const when = meeting.startAt.toLocaleString("en-KE", {
+    dateStyle: "full",
+    timeStyle: "short",
+    timeZone: meeting.timezone,
+  });
+
+  await sendZohoMail({
+    toAddress: email,
+    subject: `Nairobi Club: conflict-of-interest record corrected â€” ${meeting.title}`,
+    content: `<p>Dear ${escapeHtml(name)},</p><p>Your conflict-of-interest declaration for the following committee meeting has been corrected by an administrator.</p><p><strong>Committee:</strong> ${escapeHtml(meeting.committeeName)}<br><strong>Meeting:</strong> ${escapeHtml(meeting.title)}<br><strong>When:</strong> ${escapeHtml(when)}</p><p><strong>Correction reason:</strong> ${escapeHtml(correctionReason)}</p><p>The original declaration remains preserved in the audit history.</p><p><a href="${url}">Open the meeting record</a></p><p>Regards,<br>Nairobi Club ICT</p>`,
+  });
 }

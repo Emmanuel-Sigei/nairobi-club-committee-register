@@ -17,9 +17,9 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-Stage 3 â€” Attendance: implementation substantially complete, operational validation pending.
+Stage 4 â€” COI: implementation complete in code; migration and runtime validation pending.
 
-## Stage 1 â€” Auth + committee/member foundations
+## Stage 1 Ã¢â‚¬â€ Auth + committee/member foundations
 - [x] Email/password + email OTP flow exists.
 - [x] 10-minute OTP expiry.
 - [x] 5 failed OTP attempts -> 15-minute lock.
@@ -33,7 +33,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] Member deactivation/session invalidation must be fully validated.
 - [ ] Full login/password-reset rate limiting deferred to Stage 8.
 
-## Stage 2 â€” Meetings + Zoho Calendar
+## Stage 2 Ã¢â‚¬â€ Meetings + Zoho Calendar
 - [x] Create/update/cancel meetings.
 - [x] Ordered agenda items.
 - [x] Active members sent to Zoho Calendar.
@@ -42,7 +42,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [x] Mutation audit events.
 - [ ] Runtime Zoho Calendar credential/integration validation.
 
-## Stage 3 â€” Attendance
+## Stage 3 Ã¢â‚¬â€ Attendance
 - [x] One authoritative attendance row per meeting/member.
 - [x] Self check-in.
 - [x] Self apology.
@@ -56,15 +56,15 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] End-to-end Zoho RSVP validation not executed.
 - [ ] QR presentation/generation not implemented.
 
-## Stage 4 â€” COI
-- [ ] Schema.
-- [ ] One declaration per member/meeting.
-- [ ] Yes/No + types/detail/agenda references/recusal intent.
-- [ ] Live Admin/chair flag.
-- [ ] declaration_not_submitted at close.
-- [ ] Post-close correction flow.
+## Stage 4 Ã¢â‚¬â€ COI
+- [x] Schema implemented with immutable declaration identity + append-only revisions.
+- [x] One declaration identity per member/meeting.
+- [x] Yes/No + types/detail/agenda references/recusal intent.
+- [x] Live Admin/chair register visibility; Exco remains read-only.
+- [x] declaration_not_submitted created at close for present members without a declaration.
+- [x] Post-close Admin correction appends a new immutable revision with mandatory reason; member email notification included.
 
-## Stage 5 â€” Documents
+## Stage 5 Ã¢â‚¬â€ Documents
 - [ ] R2 signed PUT upload.
 - [ ] Versioned document records.
 - [ ] Admin-only upload enforced server-side.
@@ -72,7 +72,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] View/download/denied access logging.
 - [ ] Archived display state after close.
 
-## Stage 6 â€” Notifications
+## Stage 6 Ã¢â‚¬â€ Notifications
 - [x] Invite.
 - [x] MFA OTP.
 - [x] Password reset + confirmation.
@@ -82,7 +82,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] Attendance correction notification.
 - [ ] COI correction notification.
 
-## Stage 7 â€” Audit/reporting/Exco
+## Stage 7 Ã¢â‚¬â€ Audit/reporting/Exco
 - [x] Core append-only AuditEvent model.
 - [ ] Audit viewer.
 - [ ] Attendance report + CSV.
@@ -91,7 +91,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] Document access report + CSV.
 - [ ] Dedicated Exco/Management read-only dashboard with server-side enforcement.
 
-## Stage 8 â€” Hardening
+## Stage 8 Ã¢â‚¬â€ Hardening
 - [ ] Login endpoint rate limiting.
 - [ ] Password-reset endpoint rate limiting.
 - [ ] Session policy review/rotation.
@@ -99,6 +99,7 @@ Stage 3 â€” Attendance: implementation substantially complete, operational 
 - [ ] Production deployment validation.
 
 ## Open questions / blockers
+- Stage 4 runtime migration/Neon validation is pending; this script does not write to the database.
 - Neon database credentials/runtime access are required for migration/runtime validation.
 - Zoho Mail/Calendar credentials are required for integration validation.
 - R2 credentials are required before Stage 5 runtime validation.

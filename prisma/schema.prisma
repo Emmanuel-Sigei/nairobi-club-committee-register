@@ -61,6 +61,23 @@ enum AttendanceSource {
   SYSTEM
 }
 
+enum COIStatus {
+  NO_CONFLICT
+  CONFLICT_DECLARED
+  DECLARATION_NOT_SUBMITTED
+}
+
+enum COISource {
+  SELF
+  ADMIN
+  SYSTEM
+}
+
+enum COIRevisionKind {
+  INITIAL
+  CORRECTION
+  SYSTEM_CLOSE
+}
 model User {
   id                 String              @id @default(cuid())
   email              String              @unique
@@ -84,6 +101,8 @@ model User {
   closedMeetings     Meeting[]           @relation("MeetingClosedBy")
   attendanceRecords  MeetingAttendance[] @relation("AttendanceUser")
   markedAttendance   MeetingAttendance[] @relation("AttendanceMarkedBy")
+  conflictDeclarations MeetingConflictOfInterest[] @relation("COIUser")
+  coiRevisionsCreated MeetingConflictOfInterestRevision[] @relation("COIRevisionCreatedBy")
   @@index([role])
   @@index([isActive])
 }
@@ -151,6 +170,7 @@ model Meeting {
   closedBy         User?               @relation("MeetingClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
   agendaItems      AgendaItem[]
   attendance       MeetingAttendance[]
+  conflictDeclarations MeetingConflictOfInterest[]
   @@index([committeeId, startAt])
   @@index([status, startAt])
   @@index([zohoEventUid])
@@ -178,6 +198,41 @@ model MeetingAttendance {
   @@index([source])
 }
 
+model MeetingConflictOfInterest {
+  id               String    @id @default(cuid())
+  meetingId        String
+  userId           String
+  createdAt        DateTime  @default(now())
+  meeting          Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user             User      @relation("COIUser", fields: [userId], references: [id], onDelete: Restrict)
+  revisions        MeetingConflictOfInterestRevision[]
+
+  @@unique([meetingId, userId])
+  @@index([meetingId])
+  @@index([userId])
+}
+
+model MeetingConflictOfInterestRevision {
+  id               String          @id @default(cuid())
+  declarationId    String
+  status           COIStatus
+  source           COISource
+  revisionKind     COIRevisionKind
+  interestTypes    String[]        @default([])
+  details          String?
+  agendaItemIds    String[]        @default([])
+  recusalIntent    Boolean?
+  correctionReason String?
+  createdById      String?
+  createdAt        DateTime        @default(now())
+  declaration      MeetingConflictOfInterest @relation(fields: [declarationId], references: [id], onDelete: Cascade)
+  createdBy        User?           @relation("COIRevisionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([declarationId, createdAt])
+  @@index([status])
+  @@index([source])
+  @@index([createdById])
+}
 model AgendaItem {
   id               String    @id @default(cuid())
   meetingId        String

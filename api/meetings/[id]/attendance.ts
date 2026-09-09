@@ -26,7 +26,108 @@ async function handleWrite(request: Request, meetingId: string) {
   const context = await getAuthenticatedUser(request); if (!context) return error("Authentication required.", 401); const meeting = await getMeeting(meetingId); if (!meeting) return error("Meeting not found.", 404); const body = await readJson<AttendanceInput>(request); const action = parseAction(body.action); const requestedUserId = typeof body.userId === "string" ? body.userId.trim() : context.user.id; const reason = optionalString(body.reason);
   if (action === "sync") { if (context.user.role !== "ADMIN") return error("Administrator access required.", 403); try { const result = await syncZohoRsvps(request, context, meeting, true); return getAttendanceResponse(request, meetingId, false).then(async (response) => { if (!response.ok) return response; const payload = await response.json(); return json({ ...payload, sync: result }); }); } catch (caught) { if (caught instanceof CalendarNotConfiguredError) return error(caught.message, 503, "CALENDAR_NOT_CONFIGURED"); if (caught instanceof Error) return error(caught.message, 409); return error("Unable to synchronize Zoho RSVP responses.", 500); } }
   if (meeting.status === "CANCELLED") return error("Cancelled meetings cannot receive attendance changes.", 409);
-  if (action === "close") { if (context.user.role !== "ADMIN") return error("Administrator access required.", 403); if (meeting.status === "CLOSED") return error("Meeting is already closed.", 409); if (!meeting.lastSyncedAt || Date.now() - meeting.lastSyncedAt.getTime() >= SYNC_STALE_MS) { try { await syncZohoRsvps(request, context, meeting, false); } catch (caught) { if (caught instanceof Error) return error(`Meeting cannot be closed until Zoho RSVP synchronization succeeds: ${caught.message}`, 503); return error("Meeting cannot be closed until Zoho RSVP synchronization succeeds.", 503); } } const eligible = await getEligibleMembers(meeting.id, meeting.committeeId, meeting.startAt); const records = await getDb().meetingAttendance.findMany({ where: { meetingId } }); const existing = new Map(records.map((record) => [record.userId, record])); await getDb().$transaction(async (tx) => { for (const member of eligible) { const current = existing.get(member.id); if (!current) await tx.meetingAttendance.create({ data: { meetingId, userId: member.id, status: "ABSENT_NO_APOLOGY", source: "SYSTEM", reason: "Automatically recorded when the meeting was closed." } }); else if (current.status === "APOLOGY_DRAFT") await tx.meetingAttendance.update({ where: { id: current.id }, data: { status: "APOLOGY", source: "SYSTEM", markedAt: new Date() } }); } await tx.meeting.update({ where: { id: meetingId, status: "SCHEDULED" }, data: { status: "CLOSED", closedAt: new Date(), closedById: context.user.id } }); }); await writeAuditEvent({ request, context, action: "MEETING_CLOSED", entityType: "Meeting", entityId: meetingId, metadata: { eligibleMembers: eligible.length } }); return getAttendanceResponse(request, meetingId, false); }
+  if (action === "close") {
+    if (context.user.role !== "ADMIN") return error("Administrator access required.", 403);
+    if (meeting.status === "CLOSED") return error("Meeting is already closed.", 409);
+
+    if (!meeting.lastSyncedAt || Date.now() - meeting.lastSyncedAt.getTime() >= SYNC_STALE_MS) {
+      try {
+        await syncZohoRsvps(request, context, meeting, false);
+      } catch (caught) {
+        if (caught instanceof Error) {
+          return error(`Meeting cannot be closed until Zoho RSVP synchronization succeeds: ${caught.message}`, 503);
+        }
+        return error("Meeting cannot be closed until Zoho RSVP synchronization succeeds.", 503);
+      }
+    }
+
+    const eligible = await getEligibleMembers(meeting.id, meeting.committeeId, meeting.startAt);
+    const records = await getDb().meetingAttendance.findMany({ where: { meetingId } });
+    const existing = new Map(records.map((record) => [record.userId, record]));
+    const existingCoi = await getDb().meetingConflictOfInterest.findMany({
+      where: { meetingId },
+      select: { userId: true },
+    });
+    const coiUsers = new Set(existingCoi.map((record) => record.userId));
+    let declarationNotSubmitted = 0;
+
+    await getDb().$transaction(async (tx) => {
+      for (const member of eligible) {
+        const current = existing.get(member.id);
+
+        if (!current) {
+          await tx.meetingAttendance.create({
+            data: {
+              meetingId,
+              userId: member.id,
+              status: "ABSENT_NO_APOLOGY",
+              source: "SYSTEM",
+              reason: "Automatically recorded when the meeting was closed.",
+            },
+          });
+          continue;
+        }
+
+        if (current.status === "APOLOGY_DRAFT") {
+          await tx.meetingAttendance.update({
+            where: { id: current.id },
+            data: {
+              status: "APOLOGY",
+              source: "SYSTEM",
+              markedAt: new Date(),
+            },
+          });
+          continue;
+        }
+
+        if (current.status === "PRESENT" && !coiUsers.has(member.id)) {
+          await tx.meetingConflictOfInterest.create({
+            data: {
+              meetingId,
+              userId: member.id,
+              revisions: {
+                create: {
+                  status: "DECLARATION_NOT_SUBMITTED",
+                  source: "SYSTEM",
+                  revisionKind: "SYSTEM_CLOSE",
+                  interestTypes: [],
+                  agendaItemIds: [],
+                  createdById: context.user.id,
+                },
+              },
+            },
+          });
+          declarationNotSubmitted += 1;
+        }
+      }
+
+      await tx.meeting.update({
+        where: {
+          id: meetingId,
+          status: "SCHEDULED",
+        },
+        data: {
+          status: "CLOSED",
+          closedAt: new Date(),
+          closedById: context.user.id,
+        },
+      });
+    });
+
+    await writeAuditEvent({
+      request,
+      context,
+      action: "MEETING_CLOSED",
+      entityType: "Meeting",
+      entityId: meetingId,
+      metadata: {
+        eligibleMembers: eligible.length,
+        coiDeclarationNotSubmitted: declarationNotSubmitted,
+      },
+    });
+
+    return getAttendanceResponse(request, meetingId, false);
+  }
   if (meeting.status === "CLOSED") { if (action !== "mark" || context.user.role !== "ADMIN") return error("Attendance records are locked because this meeting is closed.", 409); const correctionReason = optionalString(body.correctionReason); if (!correctionReason) return error("A reason is required for a post-close correction.", 400); if (!(await ensureEligible(meeting, requestedUserId))) return error("The selected user was not a member of this committee for this meeting.", 400); const status = parseStatus(body.status); const current = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: requestedUserId } } }); if (!current) return error("No attendance record exists to correct.", 404); await getDb().meetingAttendance.update({ where: { id: current.id }, data: { status, source: "ADMIN", reason: correctionReason, markedAt: new Date(), markedById: context.user.id } }); await writeAuditEvent({ request, context, action: "ATTENDANCE_CORRECTED", entityType: "MeetingAttendance", entityId: current.id, metadata: { meetingId, userId: requestedUserId, previousStatus: current.status, previousSource: current.source, previousReason: current.reason, correctedStatus: status, correctionReason } }); return getAttendanceResponse(request, meetingId, false); }
   if (action === "check-in") { if (requestedUserId !== context.user.id) return error("You can only check yourself in.", 403); if (!(await ensureEligible(meeting, context.user.id))) return error("You are not an eligible committee member for this meeting.", 403); const existing = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: context.user.id } } }); if (existing?.status === "APOLOGY") return error("Your in-app apology is already recorded and cannot be replaced by check-in.", 409); await upsertAttendance(meetingId, context.user.id, "PRESENT", "SELF", context.user.id); await writeAuditEvent({ request, context, action: "ATTENDANCE_CHECKED_IN", entityType: "MeetingAttendance", entityId: existing?.id, metadata: { meetingId, userId: context.user.id, status: "PRESENT", source: "SELF" } }); return getAttendanceResponse(request, meetingId, false); }
   if (action === "apology") { if (requestedUserId !== context.user.id) return error("You can only submit your own apology.", 403); if (!(await ensureEligible(meeting, context.user.id))) return error("You are not an eligible committee member for this meeting.", 403); if (new Date() >= meeting.startAt) return error("Apologies must be submitted before the meeting starts.", 409); const existing = await getDb().meetingAttendance.findUnique({ where: { meetingId_userId: { meetingId, userId: context.user.id } } }); if (existing && existing.source === "SELF") return error("An attendance record already exists for this meeting.", 409); const record = await upsertAttendance(meetingId, context.user.id, "APOLOGY", "SELF", context.user.id, reason); await writeAuditEvent({ request, context, action: "APOLOGY_SUBMITTED", entityType: "MeetingAttendance", entityId: record.id, metadata: { meetingId, userId: context.user.id, status: "APOLOGY", source: "SELF", reason: reason ?? null } }); const warnings: string[] = []; if (isZohoMailConfigured()) { try { await sendApologyConfirmation(context.user.email, context.user.name, { title: meeting.title, committeeName: meeting.committee.name, startAt: meeting.startAt, timezone: meeting.timezone, meetingId }, reason); } catch (mailError) { console.error("Apology confirmation email failed.", mailError); warnings.push("The apology was recorded, but the confirmation email could not be delivered."); } } else warnings.push("Zoho Mail is not configured; apology confirmation email was skipped."); const response = await getAttendanceResponse(request, meetingId, false); if (!response.ok || warnings.length === 0) return response; const payload = await response.json(); return json({ ...payload, warnings }); }

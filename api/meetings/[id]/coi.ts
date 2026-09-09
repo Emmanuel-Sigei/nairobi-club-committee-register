@@ -1,11 +1,17 @@
 import { getAuthenticatedUser } from "../../_lib/auth";
 import { writeAuditEvent } from "../../_lib/audit";
 import { getDb } from "../../_lib/db";
+import {
+  isZohoMailConfigured,
+  sendCoiCorrectionNotification,
+} from "../../_lib/email";
 import { error, json, readJson } from "../../_lib/http";
 import { canViewCommittee } from "../../_lib/permissions";
 
-type COIStatus = "NO_CONFLICT" | "CONFLICT_DECLARED" | "DECLARATION_NOT_SUBMITTED";
-type COISource = "SELF" | "ADMIN" | "SYSTEM";
+type COIStatus =
+  | "NO_CONFLICT"
+  | "CONFLICT_DECLARED"
+  | "DECLARATION_NOT_SUBMITTED";
 
 interface COIInput {
   action?: unknown;
@@ -21,8 +27,7 @@ interface COIInput {
 function optionalString(value: unknown): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
   if (typeof value !== "string") throw new Error("Value must be a string.");
-  const trimmed = value.trim();
-  return trimmed || undefined;
+  return value.trim() || undefined;
 }
 
 function parseStatus(value: unknown): COIStatus {
@@ -56,7 +61,6 @@ function parseInterestTypes(value: unknown): string[] {
 
 function parseAgendaItemIds(value: unknown): string[] {
   if (value === undefined || value === null) return [];
-
   if (!Array.isArray(value)) {
     throw new Error("Agenda references must be an array.");
   }
@@ -117,6 +121,23 @@ async function isEligibleMember(
   );
 }
 
+async function isChairForMeeting(
+  meeting: NonNullable<Awaited<ReturnType<typeof getMeeting>>>,
+  userId: string,
+) {
+  return Boolean(
+    await getDb().membership.findFirst({
+      where: {
+        userId,
+        committeeId: meeting.committeeId,
+        role: "CHAIR",
+        startDate: { lte: meeting.startAt },
+        OR: [{ endDate: null }, { endDate: { gte: meeting.startAt } }],
+      },
+    }),
+  );
+}
+
 async function isPresent(meetingId: string, userId: string) {
   const attendance = await getDb().meetingAttendance.findUnique({
     where: {
@@ -133,10 +154,21 @@ async function isPresent(meetingId: string, userId: string) {
   return attendance?.status === "PRESENT";
 }
 
-async function getViewerScope(
-  request: Request,
-  meetingId: string,
+function validateAgendaReferences(
+  meeting: NonNullable<Awaited<ReturnType<typeof getMeeting>>>,
+  agendaItemIds: string[],
 ) {
+  const validIds = new Set(meeting.agendaItems.map((item) => item.id));
+  const invalid = agendaItemIds.filter((id) => !validIds.has(id));
+
+  if (invalid.length > 0) {
+    throw new Error(
+      "One or more selected agenda references do not belong to this meeting.",
+    );
+  }
+}
+
+async function getViewerScope(request: Request, meetingId: string) {
   const context = await getAuthenticatedUser(request);
 
   if (!context) {
@@ -172,18 +204,14 @@ async function getViewerScope(
   };
 }
 
-async function getRegister(
-  request: Request,
-  meetingId: string,
-) {
+async function getRegister(request: Request, meetingId: string) {
   const scope = await getViewerScope(request, meetingId);
-
   if (scope.response) return scope.response;
 
   const context = scope.context!;
   const meeting = scope.meeting!;
 
-  const eligibleMemberships = await getDb().membership.findMany({
+  const memberships = await getDb().membership.findMany({
     where: {
       committeeId: meeting.committeeId,
       startDate: { lte: meeting.startAt },
@@ -207,27 +235,31 @@ async function getRegister(
     },
   });
 
-  const eligibleMap = new Map<
+  const uniqueMemberships = new Map<
     string,
-    (typeof eligibleMemberships)[number]
+    (typeof memberships)[number]
   >();
 
-  for (const membership of eligibleMemberships) {
-    eligibleMap.set(membership.userId, membership);
+  for (const membership of memberships) {
+    uniqueMemberships.set(membership.userId, membership);
   }
 
-  const eligible = Array.from(eligibleMap.values());
+  const eligible = Array.from(uniqueMemberships.values());
 
-  const declarations = await getDb().meetingConflictOfInterest.findMany({
-    where: {
-      meetingId,
-    },
-    orderBy: {
-      user: {
-        name: "asc",
+  const declarations =
+    await getDb().meetingConflictOfInterest.findMany({
+      where: {
+        meetingId,
       },
-    },
-  });
+      include: {
+        revisions: {
+          orderBy: {
+            createdAt: "desc",
+          },
+          take: 1,
+        },
+      },
+    });
 
   const declarationByUser = new Map(
     declarations.map((declaration) => [
@@ -255,14 +287,21 @@ async function getRegister(
 
   const isAdmin = context.user.role === "ADMIN";
   const isExco = context.user.role === "EXCO_MANAGEMENT";
+  const isChair =
+    context.user.role === "MEMBER" &&
+    (await isChairForMeeting(meeting, context.user.id));
+  const canViewFullRegister = isAdmin || isExco || isChair;
 
   const rows = eligible
     .filter((membership) => {
-      if (isAdmin || isExco) return true;
+      if (canViewFullRegister) return true;
       return membership.userId === context.user.id;
     })
     .map((membership) => {
-      const declaration = declarationByUser.get(membership.userId);
+      const declaration =
+        declarationByUser.get(membership.userId);
+      const revision =
+        declaration?.revisions[0] ?? null;
 
       return {
         user: {
@@ -271,21 +310,24 @@ async function getRegister(
           email: membership.user.email,
           membershipRole: membership.role,
         },
-        attendanceStatus: attendanceByUser.get(membership.user.id) ?? null,
-        declaration: declaration
-          ? {
-              id: declaration.id,
-              status: declaration.status,
-              source: declaration.source,
-              interestTypes: declaration.interestTypes,
-              details: declaration.details,
-              agendaItemIds: declaration.agendaItemIds,
-              recusalIntent: declaration.recusalIntent,
-              declaredAt: declaration.declaredAt,
-              createdAt: declaration.createdAt,
-              updatedAt: declaration.updatedAt,
-            }
-          : null,
+        attendanceStatus:
+          attendanceByUser.get(membership.user.id) ?? null,
+        declaration:
+          declaration && revision
+            ? {
+                id: declaration.id,
+                status: revision.status,
+                source: revision.source,
+                revisionKind: revision.revisionKind,
+                interestTypes: revision.interestTypes,
+                details: revision.details,
+                agendaItemIds: revision.agendaItemIds,
+                recusalIntent: revision.recusalIntent,
+                correctionReason: revision.correctionReason,
+                declaredAt: revision.createdAt,
+                createdAt: declaration.createdAt,
+              }
+            : null,
       };
     });
 
@@ -304,9 +346,126 @@ async function getRegister(
     viewer: {
       userId: context.user.id,
       role: context.user.role,
+      canViewFullRegister,
+      isChair,
     },
     declarations: rows,
   });
+}
+
+async function createDeclaration(
+  request: Request,
+  context: NonNullable<
+    Awaited<ReturnType<typeof getAuthenticatedUser>>
+  >,
+  meeting: NonNullable<
+    Awaited<ReturnType<typeof getMeeting>>
+  >,
+  targetUserId: string,
+  source: "SELF" | "ADMIN",
+  status: "NO_CONFLICT" | "CONFLICT_DECLARED",
+  body: COIInput,
+) {
+  if (!(await isEligibleMember(meeting, targetUserId))) {
+    return error(
+      "The selected user was not an eligible committee member for this meeting.",
+      400,
+    );
+  }
+
+  if (!(await isPresent(meeting.id, targetUserId))) {
+    return error(
+      "The selected member must be recorded as present before the COI declaration can be submitted.",
+      409,
+    );
+  }
+
+  const existing =
+    await getDb().meetingConflictOfInterest.findUnique({
+      where: {
+        meetingId_userId: {
+          meetingId: meeting.id,
+          userId: targetUserId,
+        },
+      },
+    });
+
+  if (existing) {
+    return error(
+      "A conflict-of-interest declaration already exists for this meeting.",
+      409,
+    );
+  }
+
+  let interestTypes: string[] = [];
+  let details: string | undefined;
+  let agendaItemIds: string[] = [];
+  let recusalIntent: boolean | undefined;
+
+  if (status === "CONFLICT_DECLARED") {
+    interestTypes = parseInterestTypes(body.interestTypes);
+    details = optionalString(body.details);
+
+    if (!details) {
+      return error(
+        "Details are required when a conflict is declared.",
+        400,
+      );
+    }
+
+    agendaItemIds = parseAgendaItemIds(body.agendaItemIds);
+    validateAgendaReferences(meeting, agendaItemIds);
+    recusalIntent = parseBoolean(
+      body.recusalIntent,
+      "Recusal intent",
+    );
+  }
+
+  const declaration =
+    await getDb().meetingConflictOfInterest.create({
+      data: {
+        meetingId: meeting.id,
+        userId: targetUserId,
+        revisions: {
+          create: {
+            status,
+            source,
+            revisionKind: "INITIAL",
+            interestTypes,
+            details: details ?? null,
+            agendaItemIds,
+            recusalIntent:
+              status === "CONFLICT_DECLARED"
+                ? recusalIntent
+                : null,
+            createdById: context.user.id,
+          },
+        },
+      },
+    });
+
+  await writeAuditEvent({
+    request,
+    context,
+    action:
+      source === "SELF"
+        ? "COI_DECLARED"
+        : "COI_RECORDED",
+    entityType: "MeetingConflictOfInterest",
+    entityId: declaration.id,
+    metadata: {
+      meetingId: meeting.id,
+      userId: targetUserId,
+      status,
+      source,
+      interestTypes,
+      details: details ?? null,
+      agendaItemIds,
+      recusalIntent: recusalIntent ?? null,
+    },
+  });
+
+  return getRegister(request, meeting.id);
 }
 
 async function handleWrite(
@@ -314,12 +473,12 @@ async function handleWrite(
   meetingId: string,
 ) {
   const scope = await getViewerScope(request, meetingId);
-
   if (scope.response) return scope.response;
 
   const context = scope.context!;
   const meeting = scope.meeting!;
   const body = await readJson<COIInput>(request);
+
   const action =
     typeof body.action === "string"
       ? body.action.trim()
@@ -338,12 +497,9 @@ async function handleWrite(
   }
 
   if (action === "declare") {
-    if (
-      context.user.role !== "MEMBER" &&
-      context.user.role !== "ADMIN"
-    ) {
+    if (context.user.role !== "MEMBER") {
       return error(
-        "Only a member or administrator may submit a personal declaration.",
+        "Only committee members may submit a personal conflict-of-interest declaration.",
         403,
       );
     }
@@ -355,163 +511,47 @@ async function handleWrite(
       );
     }
 
-    if (!(await isEligibleMember(meeting, context.user.id))) {
-      return error(
-        "You were not an eligible committee member for this meeting.",
-        403,
-      );
-    }
-
     if (meeting.status !== "SCHEDULED") {
       return error(
-        "Conflict-of-interest declarations can only be submitted while the meeting is scheduled.",
+        "Conflict-of-interest declarations are locked because this meeting is not scheduled.",
         409,
       );
     }
 
-    if (!(await isPresent(meeting.id, context.user.id))) {
-      return error(
-        "You must be recorded as present before submitting a conflict-of-interest declaration.",
-        409,
-      );
-    }
+    const status = parseStatus(body.status);
 
-    const existing =
-      await getDb().meetingConflictOfInterest.findUnique({
-        where: {
-          meetingId_userId: {
-            meetingId: meeting.id,
-            userId: context.user.id,
-          },
-        },
-      });
-
-    if (existing) {
-      return error(
-        "A conflict-of-interest declaration already exists for this meeting.",
-        409,
-      );
-    }
-
-    const hasConflict = body.status === "CONFLICT_DECLARED";
-
-    if (body.status !== "NO_CONFLICT" && !hasConflict) {
+    if (
+      status !== "NO_CONFLICT" &&
+      status !== "CONFLICT_DECLARED"
+    ) {
       return error(
         "Choose either No conflict or Conflict declared.",
         400,
       );
     }
 
-    let interestTypes: string[] = [];
-    let details: string | undefined;
-    let agendaItemIds: string[] = [];
-    let recusalIntent: boolean | undefined;
-
-    if (hasConflict) {
-      interestTypes = parseInterestTypes(body.interestTypes);
-      details = optionalString(body.details);
-
-      if (!details) {
-        return error(
-          "Details are required when a conflict is declared.",
-          400,
-        );
-      }
-
-      agendaItemIds = parseAgendaItemIds(body.agendaItemIds);
-      recusalIntent = parseBoolean(
-        body.recusalIntent,
-        "Recusal intent",
-      );
-    }
-
-    const declaration =
-      await getDb().meetingConflictOfInterest.create({
-        data: {
-          meetingId: meeting.id,
-          userId: context.user.id,
-          status: hasConflict
-            ? "CONFLICT_DECLARED"
-            : "NO_CONFLICT",
-          source: "SELF",
-          interestTypes:
-            interestTypes.length > 0
-              ? interestTypes
-              : undefined,
-          details: details ?? undefined,
-          agendaItemIds:
-            agendaItemIds.length > 0
-              ? agendaItemIds
-              : undefined,
-          recusalIntent:
-            hasConflict
-              ? recusalIntent
-              : undefined,
-          declaredAt: new Date(),
-        },
-      });
-
-    await writeAuditEvent({
+    return createDeclaration(
       request,
       context,
-      action: "COI_DECLARED",
-      entityType: "MeetingConflictOfInterest",
-      entityId: declaration.id,
-      metadata: {
-        meetingId: meeting.id,
-        userId: context.user.id,
-        status: declaration.status,
-        source: "SELF",
-        interestTypes,
-        details: details ?? null,
-        agendaItemIds,
-        recusalIntent:
-          recusalIntent ?? null,
-      },
-    });
-
-    return getRegister(request, meetingId);
+      meeting,
+      context.user.id,
+      "SELF",
+      status,
+      body,
+    );
   }
 
   if (action === "record") {
     if (context.user.role !== "ADMIN") {
-      return error("Administrator access required.", 403);
+      return error(
+        "Administrator access required.",
+        403,
+      );
     }
 
     if (meeting.status !== "SCHEDULED") {
       return error(
         "Administrative COI recording is only available while the meeting is scheduled.",
-        409,
-      );
-    }
-
-    if (!(await isEligibleMember(meeting, targetUserId))) {
-      return error(
-        "The selected user was not an eligible committee member for this meeting.",
-        400,
-      );
-    }
-
-    if (!(await isPresent(meeting.id, targetUserId))) {
-      return error(
-        "The selected member must be recorded as present before the COI declaration can be recorded.",
-        409,
-      );
-    }
-
-    const existing =
-      await getDb().meetingConflictOfInterest.findUnique({
-        where: {
-          meetingId_userId: {
-            meetingId: meeting.id,
-            userId: targetUserId,
-          },
-        },
-      });
-
-    if (existing) {
-      return error(
-        "A conflict-of-interest declaration already exists for this member.",
         409,
       );
     }
@@ -528,78 +568,23 @@ async function handleWrite(
       );
     }
 
-    let interestTypes: string[] = [];
-    let details: string | undefined;
-    let agendaItemIds: string[] = [];
-    let recusalIntent: boolean | undefined;
-
-    if (status === "CONFLICT_DECLARED") {
-      interestTypes = parseInterestTypes(body.interestTypes);
-      details = optionalString(body.details);
-
-      if (!details) {
-        return error(
-          "Details are required when a conflict is declared.",
-          400,
-        );
-      }
-
-      agendaItemIds = parseAgendaItemIds(body.agendaItemIds);
-      recusalIntent = parseBoolean(
-        body.recusalIntent,
-        "Recusal intent",
-      );
-    }
-
-    const declaration =
-      await getDb().meetingConflictOfInterest.create({
-        data: {
-          meetingId: meeting.id,
-          userId: targetUserId,
-          status,
-          source: "ADMIN",
-          interestTypes:
-            interestTypes.length > 0
-              ? interestTypes
-              : undefined,
-          details: details ?? undefined,
-          agendaItemIds:
-            agendaItemIds.length > 0
-              ? agendaItemIds
-              : undefined,
-          recusalIntent:
-            status === "CONFLICT_DECLARED"
-              ? recusalIntent
-              : undefined,
-          declaredAt: new Date(),
-        },
-      });
-
-    await writeAuditEvent({
+    return createDeclaration(
       request,
       context,
-      action: "COI_RECORDED",
-      entityType: "MeetingConflictOfInterest",
-      entityId: declaration.id,
-      metadata: {
-        meetingId: meeting.id,
-        userId: targetUserId,
-        status,
-        source: "ADMIN",
-        interestTypes,
-        details: details ?? null,
-        agendaItemIds,
-        recusalIntent:
-          recusalIntent ?? null,
-      },
-    });
-
-    return getRegister(request, meetingId);
+      meeting,
+      targetUserId,
+      "ADMIN",
+      status,
+      body,
+    );
   }
 
   if (action === "correct") {
     if (context.user.role !== "ADMIN") {
-      return error("Administrator access required.", 403);
+      return error(
+        "Administrator access required.",
+        403,
+      );
     }
 
     if (meeting.status !== "CLOSED") {
@@ -609,9 +594,8 @@ async function handleWrite(
       );
     }
 
-    const correctionReason = optionalString(
-      body.correctionReason,
-    );
+    const correctionReason =
+      optionalString(body.correctionReason);
 
     if (!correctionReason) {
       return error(
@@ -627,7 +611,7 @@ async function handleWrite(
       );
     }
 
-    const existing =
+    const declaration =
       await getDb().meetingConflictOfInterest.findUnique({
         where: {
           meetingId_userId: {
@@ -635,9 +619,26 @@ async function handleWrite(
             userId: targetUserId,
           },
         },
+        include: {
+          revisions: {
+            orderBy: {
+              createdAt: "desc",
+            },
+            take: 1,
+          },
+          user: {
+            select: {
+              email: true,
+              name: true,
+            },
+          },
+        },
       });
 
-    if (!existing) {
+    if (
+      !declaration ||
+      declaration.revisions.length === 0
+    ) {
       return error(
         "No conflict-of-interest declaration exists to correct.",
         404,
@@ -651,7 +652,7 @@ async function handleWrite(
       status !== "CONFLICT_DECLARED"
     ) {
       return error(
-        "A post-close correction must resolve to No conflict or Conflict declared.",
+        "A correction must resolve to No conflict or Conflict declared.",
         400,
       );
     }
@@ -662,7 +663,8 @@ async function handleWrite(
     let recusalIntent: boolean | undefined;
 
     if (status === "CONFLICT_DECLARED") {
-      interestTypes = parseInterestTypes(body.interestTypes);
+      interestTypes =
+        parseInterestTypes(body.interestTypes);
       details = optionalString(body.details);
 
       if (!details) {
@@ -672,35 +674,36 @@ async function handleWrite(
         );
       }
 
-      agendaItemIds = parseAgendaItemIds(body.agendaItemIds);
+      agendaItemIds =
+        parseAgendaItemIds(body.agendaItemIds);
+      validateAgendaReferences(
+        meeting,
+        agendaItemIds,
+      );
       recusalIntent = parseBoolean(
         body.recusalIntent,
         "Recusal intent",
       );
     }
 
-    const updated =
-      await getDb().meetingConflictOfInterest.update({
-        where: {
-          id: existing.id,
-        },
+    const previous = declaration.revisions[0];
+
+    const revision =
+      await getDb().meetingConflictOfInterestRevision.create({
         data: {
+          declarationId: declaration.id,
           status,
           source: "ADMIN",
-          interestTypes:
-            interestTypes.length > 0
-              ? interestTypes
-              : null,
+          revisionKind: "CORRECTION",
+          interestTypes,
           details: details ?? null,
-          agendaItemIds:
-            agendaItemIds.length > 0
-              ? agendaItemIds
-              : null,
+          agendaItemIds,
           recusalIntent:
             status === "CONFLICT_DECLARED"
               ? recusalIntent
               : null,
-          declaredAt: new Date(),
+          correctionReason,
+          createdById: context.user.id,
         },
       });
 
@@ -709,33 +712,79 @@ async function handleWrite(
       context,
       action: "COI_CORRECTED",
       entityType: "MeetingConflictOfInterest",
-      entityId: updated.id,
+      entityId: declaration.id,
       metadata: {
         meetingId: meeting.id,
         userId: targetUserId,
+        revisionId: revision.id,
         correctionReason,
         previous: {
-          status: existing.status,
-          source: existing.source,
-          interestTypes: existing.interestTypes,
-          details: existing.details,
-          agendaItemIds: existing.agendaItemIds,
-          recusalIntent: existing.recusalIntent,
-          declaredAt: existing.declaredAt,
+          revisionId: previous.id,
+          status: previous.status,
+          source: previous.source,
+          interestTypes: previous.interestTypes,
+          details: previous.details,
+          agendaItemIds: previous.agendaItemIds,
+          recusalIntent: previous.recusalIntent,
+          createdAt: previous.createdAt,
         },
         current: {
-          status: updated.status,
-          source: updated.source,
-          interestTypes: updated.interestTypes,
-          details: updated.details,
-          agendaItemIds: updated.agendaItemIds,
-          recusalIntent: updated.recusalIntent,
-          declaredAt: updated.declaredAt,
+          revisionId: revision.id,
+          status: revision.status,
+          source: revision.source,
+          interestTypes: revision.interestTypes,
+          details: revision.details,
+          agendaItemIds: revision.agendaItemIds,
+          recusalIntent: revision.recusalIntent,
+          createdAt: revision.createdAt,
         },
       },
     });
 
-    return getRegister(request, meetingId);
+    const warnings: string[] = [];
+
+    if (isZohoMailConfigured()) {
+      try {
+        await sendCoiCorrectionNotification(
+          declaration.user.email,
+          declaration.user.name,
+          {
+            title: meeting.title,
+            committeeName: meeting.committee.name,
+            startAt: meeting.startAt,
+            timezone: meeting.timezone,
+            meetingId: meeting.id,
+          },
+          correctionReason,
+        );
+      } catch (mailError) {
+        console.error(
+          "COI correction email failed.",
+          mailError,
+        );
+        warnings.push(
+          "The correction was saved, but the member notification email could not be delivered.",
+        );
+      }
+    } else {
+      warnings.push(
+        "Zoho Mail is not configured; COI correction notification was skipped.",
+      );
+    }
+
+    const response =
+      await getRegister(request, meeting.id);
+
+    if (!response.ok || warnings.length === 0) {
+      return response;
+    }
+
+    const payload = await response.json();
+
+    return json({
+      ...payload,
+      warnings,
+    });
   }
 
   return error(
@@ -744,18 +793,24 @@ async function handleWrite(
   );
 }
 
-export default async function handler(request: Request) {
+export default async function handler(
+  request: Request,
+) {
   const url = new URL(request.url);
-  const segments = url.pathname.split("/").filter(Boolean);
-
-  const meetingsIndex = segments.indexOf("meetings");
+  const segments =
+    url.pathname.split("/").filter(Boolean);
+  const meetingsIndex =
+    segments.indexOf("meetings");
   const meetingId =
     meetingsIndex >= 0
       ? segments[meetingsIndex + 1]
       : undefined;
 
   if (!meetingId) {
-    return error("Meeting ID is required.", 400);
+    return error(
+      "Meeting ID is required.",
+      400,
+    );
   }
 
   try {
@@ -767,19 +822,17 @@ export default async function handler(request: Request) {
       return handleWrite(request, meetingId);
     }
 
-    return error("Method not allowed.", 405);
+    return error(
+      "Method not allowed.",
+      405,
+    );
   } catch (caught) {
-    if (caught instanceof SyntaxError) {
-      return error("Invalid request body.", 400);
-    }
-
     if (caught instanceof Error) {
       return error(caught.message, 400);
     }
 
-    console.error("COI request failed.", caught);
     return error(
-      "Unable to process the conflict-of-interest request.",
+      "Unable to process conflict-of-interest request.",
       500,
     );
   }
