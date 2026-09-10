@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bootstrapped; Zoho Mail configuration and live authentication/OTP validation remain.
+INFRASTRUCTURE I2C COMPLETE - Neon main initialized; initial Administrator bootstrapped; Zoho Mail SMTP and Zoho Calendar OAuth validated; automatic committee calendar provisioning validated. Remaining: live application authentication/OTP, Cloudflare R2, Vercel deployment and focused UAT.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -40,7 +40,7 @@ INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bo
 - [x] Zoho create/update/delete integration.
 - [x] Meeting email notifications.
 - [x] Mutation audit events.
-- [ ] Runtime Zoho Calendar credential/integration validation.
+- [x] Runtime Zoho Calendar credential/integration validation completed using the superadmin service identity.
 
 ## Stage 3
 - [x] One authoritative attendance row per meeting/member.
@@ -51,8 +51,8 @@ INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bo
 - [x] Zoho decline only creates draft apology if no app record exists.
 - [x] Auto absent on close.
 - [x] Post-close Admin correction is append-only with mandatory reason; original attendance row is preserved.
-- [ ] Prisma migration not executed.
-- [ ] Neon runtime validation not executed.
+- [x] Prisma migrations deployed to Neon main during Infrastructure I1.
+- [x] Neon main schema and governance triggers validated during Infrastructure I1.
 - [ ] End-to-end Zoho RSVP validation not executed.
 - [ ] QR presentation/generation not implemented.
 
@@ -82,7 +82,7 @@ INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bo
 - [x] New document notification.
 - [x] Attendance correction notification.
 - [x] COI correction notification.
-- [ ] Zoho Mail runtime validation deferred to infrastructure phase.
+- [x] Zoho Mail runtime validated; application outbound mail uses authenticated Zoho SMTP.
 
 ## Stage 7
 - [x] Core append-only AuditEvent model.
@@ -102,11 +102,11 @@ INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bo
 - [ ] Production deployment validation.
 
 ## Open questions / blockers
-- Stage 4 runtime migration/Neon validation is pending; this script does not write to the database.
-- Neon database credentials/runtime access are required for migration/runtime validation.
-- Zoho Mail/Calendar credentials are required for integration validation.
-- R2 credentials are required before Stage 5 runtime validation.
-- Decide whether QR should encode the existing authenticated meeting URL (recommended) or a separate expiring check-in token.
+- Live Administrator login, email OTP, authenticated session and logout remain to be validated against the deployed application runtime.
+- Cloudflare R2 bucket, CORS and document runtime validation remain.
+- Vercel environment configuration and first deployment remain.
+- End-to-end Zoho RSVP synchronization remains to be validated with a real committee meeting.
+- Dependency security review must be repeated before production go-live.
 
 ## Decisions
 - No cron under Vercel Hobby.
@@ -258,8 +258,8 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [x] Prisma validation, ESLint, TypeScript and production build passed after correction.
 - [x] First Administrator bootstrap.
 - [ ] Live authentication/OTP validation.
-- [ ] Zoho Mail runtime validation.
-- [ ] Zoho Calendar runtime validation.
+- [x] Zoho Mail runtime validation.
+- [x] Zoho Calendar runtime validation.
 - [ ] Cloudflare R2 runtime validation.
 - [ ] Vercel runtime/deployment validation.
 ## Infrastructure I2A - Initial Administrator bootstrap
@@ -271,5 +271,34 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [x] Administrator account created active with passwordSetAt populated.
 - [x] INITIAL_ADMIN_BOOTSTRAPPED immutable SYSTEM audit event created atomically.
 - [x] Exactly one user verified after bootstrap.
-- [ ] Zoho Mail runtime configuration required before login OTP can complete.
+- [x] Zoho Mail SMTP runtime configuration and sender identity validated.
 - [ ] Live Administrator login/password/OTP/session validation.
+
+## Infrastructure I2B - Zoho Mail
+
+- [x] Zoho Mail service identity confirmed as superadmin@nairobiclub.com.
+- [x] governance@nairobiclub.com confirmed as the application From alias.
+- [x] Zoho REST sender-name limitation verified from the raw message From header.
+- [x] Application outbound mail moved to authenticated Zoho SMTP.
+- [x] Zoho application-specific SMTP password validated without exposing or committing it.
+- [x] Sender identity validated as Nairobi Club <governance@nairobiclub.com>.
+- [x] Existing application email workflows retained through the centralized Mail helper.
+- [x] Nairobi Club corporate email branding applied.
+- [ ] Live application login/OTP flow remains to be validated after runtime deployment.
+
+## Infrastructure I2C - Zoho Calendar and automatic provisioning
+
+- [x] Separate Zoho Calendar refresh token generated under superadmin@nairobiclub.com.
+- [x] Required Calendar scopes validated.
+- [x] Refresh-token exchange validated live.
+- [x] Calendar ownership model fixed: institutional calendars are owned by superadmin@nairobiclub.com.
+- [x] Committee creation automatically provisions a dedicated Zoho Calendar.
+- [x] Returned Zoho Calendar UID is stored internally on the Committee record.
+- [x] Administrators no longer enter or edit raw Zoho Calendar IDs.
+- [x] Committee rename synchronizes the associated Zoho Calendar name.
+- [x] Committee archive preserves the Zoho Calendar and historical meetings.
+- [x] Database failure after Calendar creation has compensating Calendar cleanup.
+- [x] Calendar rename database failure has rollback handling.
+- [x] Live temporary Calendar create, rename and delete lifecycle validated.
+- [x] Temporary validation Calendar confirmed removed after testing.
+- [x] No real committee records exist yet; production committee creation will use the automatic provisioning workflow.
