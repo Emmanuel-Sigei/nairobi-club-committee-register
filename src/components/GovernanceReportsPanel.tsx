@@ -156,12 +156,12 @@ function StatCard({
   detail: string;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <p className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">
+    <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-[0.10em] text-slate-500">
         {label}
       </p>
 
-      <p className="mt-3 text-3xl font-semibold text-slate-950">
+      <p className="mt-3 text-[26px] font-semibold text-slate-950">
         {value}
       </p>
 
@@ -221,7 +221,7 @@ export default function GovernanceReportsPanel() {
           setErrorMessage(
             cause instanceof Error
               ? cause.message
-              : "Unable to load report.",
+              : "We couldn't load this report.",
           );
         } finally {
           setReportLoading(false);
@@ -278,7 +278,7 @@ export default function GovernanceReportsPanel() {
           setErrorMessage(
             cause instanceof Error
               ? cause.message
-              : "Unable to load governance information.",
+              : "We couldn't load the reports.",
           );
         },
       )
@@ -324,7 +324,7 @@ export default function GovernanceReportsPanel() {
 
       if (!response.ok) {
         let message =
-          "Unable to export CSV.";
+          "We couldn't download this report.";
 
         try {
           const payload =
@@ -368,40 +368,39 @@ export default function GovernanceReportsPanel() {
       setErrorMessage(
         cause instanceof Error
           ? cause.message
-          : "Unable to export CSV.",
+          : "We couldn't download this report.",
       );
     }
   }
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
-        Loading governance dashboard...
+      <div className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+        Loading reports...
       </div>
     );
   }
 
   return (
     <div className="space-y-8">
-      <section className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-          Governance & Oversight
+      <section className="rounded-xl border border-slate-200 bg-white p-7 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
+          Reports
         </p>
 
         <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-950">
-              Audit, reports & Exco overview
+            <h2 className="text-[26px] font-semibold tracking-tight text-slate-950">
+              Reports & audit trail
             </h2>
 
             <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-              Read-only oversight across all Nairobi Club committees.
-              Access, exports and governance data are enforced by the server.
+              Review attendance, conflicts of interest, document access and recent activity across Club committees.
             </p>
           </div>
 
           <span className="inline-flex rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-700">
-            Read only
+            View only
           </span>
         </div>
       </section>
@@ -430,7 +429,7 @@ export default function GovernanceReportsPanel() {
                 dashboard.summary
                   .activeUsers
               }
-              detail="Current active accounts"
+              detail="People with active access"
             />
 
             <StatCard
@@ -448,12 +447,12 @@ export default function GovernanceReportsPanel() {
                 dashboard.summary
                   .documents.documents
               }
-              detail={`${dashboard.summary.documents.versions} immutable versions`}
+              detail={`${dashboard.summary.documents.versions} saved versions`}
             />
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="font-semibold text-slate-950">
                 Attendance overview
               </h3>
@@ -489,7 +488,7 @@ export default function GovernanceReportsPanel() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
               <h3 className="font-semibold text-slate-950">
                 Conflict-of-interest overview
               </h3>
@@ -529,15 +528,15 @@ export default function GovernanceReportsPanel() {
         </>
       )}
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="font-semibold text-slate-950">
-              Governance reports
+              Committee reports
             </h3>
 
             <p className="mt-1 text-sm text-slate-500">
-              Review data in the application or export the current report to CSV.
+              Choose a report to review it here, or download the full CSV.
             </p>
           </div>
 
@@ -664,7 +663,7 @@ export default function GovernanceReportsPanel() {
         )}
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-6 py-5">
           <h3 className="font-semibold text-slate-950">
             Recent audit activity

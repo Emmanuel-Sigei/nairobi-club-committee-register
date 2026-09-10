@@ -1,12 +1,13 @@
-import {
-  getZohoAccessToken,
-  isZohoServiceConfigured,
-} from "./zoho-oauth";
+import nodemailer from "nodemailer";
 
 interface ZohoMailConfig {
-  apiBaseUrl: string;
-  accountId: string;
+  host: string;
+  port: number;
+  secure: boolean;
+  user: string;
+  appPassword: string;
   fromAddress: string;
+  fromName: string;
 }
 
 interface SendMailInput {
@@ -36,39 +37,57 @@ const PAGE = "#F5F7FA";
 const WHITE = "#FFFFFF";
 
 function getConfig(): ZohoMailConfig {
-  const apiBaseUrl =
-    process.env.ZOHO_MAIL_API_BASE_URL
+  const host =
+    process.env.ZOHO_SMTP_HOST
       ?.trim();
 
-  const accountId =
-    process.env.ZOHO_MAIL_ACCOUNT_ID
+  const portValue =
+    process.env.ZOHO_SMTP_PORT
+      ?.trim() || "587";
+
+  const user =
+    process.env.ZOHO_SMTP_USER
+      ?.trim();
+
+  const appPassword =
+    process.env.ZOHO_SMTP_APP_PASSWORD
       ?.trim();
 
   const fromAddress =
     process.env.ZOHO_MAIL_FROM_ADDRESS
       ?.trim();
 
+  const fromName =
+    process.env.ZOHO_MAIL_FROM_NAME
+      ?.trim();
+
+  const port =
+    Number(portValue);
+
   if (
-    !apiBaseUrl ||
-    !accountId ||
+    !host ||
+    !user ||
+    !appPassword ||
     !fromAddress ||
-    !isZohoServiceConfigured(
-      "MAIL",
-    )
+    !fromName ||
+    !Number.isInteger(port) ||
+    port < 1 ||
+    port > 65535
   ) {
     throw new Error(
-      "Zoho Mail configuration is incomplete.",
+      "Zoho Mail SMTP configuration is incomplete.",
     );
   }
 
   return {
-    apiBaseUrl:
-      apiBaseUrl.replace(
-        /\/+$/,
-        "",
-      ),
-    accountId,
+    host,
+    port,
+    secure:
+      port === 465,
+    user,
+    appPassword,
     fromAddress,
+    fromName,
   };
 }
 
@@ -77,16 +96,26 @@ export function assertZohoMailConfigured(): void {
 }
 
 export function isZohoMailConfigured(): boolean {
+  const port =
+    Number(
+      process.env.ZOHO_SMTP_PORT
+        ?.trim() || "587",
+    );
+
   return Boolean(
-    process.env.ZOHO_MAIL_API_BASE_URL
+    process.env.ZOHO_SMTP_HOST
       ?.trim() &&
-      process.env.ZOHO_MAIL_ACCOUNT_ID
-        ?.trim() &&
-      process.env.ZOHO_MAIL_FROM_ADDRESS
-        ?.trim() &&
-      isZohoServiceConfigured(
-        "MAIL",
-      ),
+    process.env.ZOHO_SMTP_USER
+      ?.trim() &&
+    process.env.ZOHO_SMTP_APP_PASSWORD
+      ?.trim() &&
+    process.env.ZOHO_MAIL_FROM_ADDRESS
+      ?.trim() &&
+    process.env.ZOHO_MAIL_FROM_NAME
+      ?.trim() &&
+    Number.isInteger(port) &&
+    port > 0 &&
+    port <= 65535,
   );
 }
 
@@ -114,7 +143,7 @@ function paragraph(
     <p style="
       margin:0 0 18px 0;
       color:${INK};
-      font-family:Arial,Helvetica,sans-serif;
+      font-family:'Segoe UI',Arial,Helvetica,sans-serif;
       font-size:15px;
       line-height:1.7;
     ">
@@ -147,7 +176,7 @@ function notice(
           <div style="
             margin:0 0 5px 0;
             color:${NAVY};
-            font-family:Arial,Helvetica,sans-serif;
+            font-family:'Segoe UI',Arial,Helvetica,sans-serif;
             font-size:13px;
             line-height:1.4;
             font-weight:700;
@@ -158,7 +187,7 @@ function notice(
           </div>
           <div style="
             color:${INK};
-            font-family:Arial,Helvetica,sans-serif;
+            font-family:'Segoe UI',Arial,Helvetica,sans-serif;
             font-size:14px;
             line-height:1.6;
           ">
@@ -196,7 +225,7 @@ function button(
               display:inline-block;
               padding:13px 22px;
               color:${WHITE};
-              font-family:Arial,Helvetica,sans-serif;
+              font-family:'Segoe UI',Arial,Helvetica,sans-serif;
               font-size:14px;
               line-height:1.3;
               font-weight:700;
@@ -227,7 +256,7 @@ function detailTable(
                 padding:11px 12px;
                 border-bottom:1px solid ${BORDER};
                 color:${MUTED};
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:13px;
                 line-height:1.5;
                 font-weight:600;
@@ -241,7 +270,7 @@ function detailTable(
                 padding:11px 12px;
                 border-bottom:1px solid ${BORDER};
                 color:${INK};
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:14px;
                 line-height:1.5;
                 font-weight:600;
@@ -301,7 +330,7 @@ function otpPanel(
           <div style="
             margin:0 0 7px 0;
             color:${MUTED};
-            font-family:Arial,Helvetica,sans-serif;
+            font-family:'Segoe UI',Arial,Helvetica,sans-serif;
             font-size:11px;
             line-height:1.4;
             font-weight:700;
@@ -312,7 +341,7 @@ function otpPanel(
           </div>
           <div style="
             color:${NAVY};
-            font-family:'Courier New',Courier,monospace;
+            font-family:'Segoe UI',Arial,Helvetica,sans-serif;
             font-size:34px;
             line-height:1.2;
             font-weight:700;
@@ -413,17 +442,17 @@ function emailShell(input: {
                 <tr>
                   <td
                     valign="middle"
-                    width="82"
-                    style="width:82px;"
+                    width="116"
+                    style="width:116px;"
                   >
                     <img
                       src="${logo}"
                       alt="Nairobi Club"
-                      width="62"
+                      width="94"
                       style="
                         display:block;
-                        width:62px;
-                        max-width:62px;
+                        width:94px;
+                        max-width:94px;
                         height:auto;
                         border:0;
                       "
@@ -434,7 +463,7 @@ function emailShell(input: {
                     style="
                       padding-left:12px;
                       color:${WHITE};
-                      font-family:Georgia,'Times New Roman',serif;
+                      font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                     "
                   >
                     <div style="
@@ -448,7 +477,7 @@ function emailShell(input: {
                     <div style="
                       margin-top:5px;
                       color:${GOLD};
-                      font-family:Arial,Helvetica,sans-serif;
+                      font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                       font-size:11px;
                       line-height:1.4;
                       font-weight:700;
@@ -491,7 +520,7 @@ function emailShell(input: {
               <div style="
                 margin:0 0 24px 0;
                 color:${NAVY};
-                font-family:Georgia,'Times New Roman',serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:27px;
                 line-height:1.25;
                 font-weight:700;
@@ -514,7 +543,7 @@ function emailShell(input: {
             >
               <div style="
                 color:#D7DEE8;
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:12px;
                 line-height:1.6;
               ">
@@ -523,16 +552,16 @@ function emailShell(input: {
               <div style="
                 margin-top:5px;
                 color:${GOLD};
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:11px;
                 line-height:1.5;
               ">
-                Governance &bull; Accountability &bull; Institutional Record
+                Nairobi Club
               </div>
               <div style="
                 margin-top:10px;
                 color:#9EACBD;
-                font-family:Arial,Helvetica,sans-serif;
+                font-family:'Segoe UI',Arial,Helvetica,sans-serif;
                 font-size:10px;
                 line-height:1.5;
               ">
@@ -559,53 +588,60 @@ async function sendZohoMail({
   const config =
     getConfig();
 
-  const accessToken =
-    await getZohoAccessToken(
-      "MAIL",
-    );
-
-  const response =
-    await fetch(
-      `${config.apiBaseUrl}/accounts/${encodeURIComponent(config.accountId)}/messages`,
-      {
-        method:
-          "POST",
-        headers: {
-          Authorization:
-            `Zoho-oauthtoken ${accessToken}`,
-          "Content-Type":
-            "application/json",
-          Accept:
-            "application/json",
-        },
-        body:
-          JSON.stringify({
-            fromAddress:
-              config.fromAddress,
-            toAddress,
-            subject,
-            content:
-              emailShell({
-                title,
-                preheader,
-                bodyHtml,
-              }),
-            mailFormat:
-              "html",
-          }),
+  const transport =
+    nodemailer.createTransport({
+      host:
+        config.host,
+      port:
+        config.port,
+      secure:
+        config.secure,
+      requireTLS:
+        !config.secure,
+      auth: {
+        user:
+          config.user,
+        pass:
+          config.appPassword,
       },
-    );
+      connectionTimeout:
+        15000,
+      greetingTimeout:
+        10000,
+      socketTimeout:
+        30000,
+      tls: {
+        minVersion:
+          "TLSv1.2",
+      },
+    });
 
-  if (!response.ok) {
-    await response
-      .text()
-      .catch(
-        () => "",
-      );
-
-    throw new Error(
-      `Zoho Mail request failed with HTTP ${response.status}.`,
-    );
+  try {
+    await transport.sendMail({
+      from: {
+        name:
+          config.fromName,
+        address:
+          config.fromAddress,
+      },
+      replyTo: {
+        name:
+          config.fromName,
+        address:
+          config.fromAddress,
+      },
+      to:
+        toAddress,
+      subject,
+      html:
+        emailShell({
+          title,
+          preheader,
+          bodyHtml,
+        }),
+    });
+  } finally {
+    transport.close();
   }
 }
 
@@ -710,7 +746,7 @@ export async function sendInvitationEmail(
         `Dear ${escapeHtml(name)},`,
       ) +
       paragraph(
-        "You have been invited to access the Nairobi Club Committee Register, the Club's secure record for committee meetings, attendance, governance declarations and documents.",
+        "You have been invited to access the Nairobi Club Committee Register, the Club's central workspace for committee meetings, attendance, declarations and documents.",
       ) +
       button(
         url,
@@ -1031,7 +1067,7 @@ export async function sendAttendanceCorrectionNotification(
         `Dear ${escapeHtml(name)},`,
       ) +
       paragraph(
-        "An administrator has corrected your attendance record. The original record remains preserved in the governance history.",
+        "An administrator has corrected your attendance record. The previous entry remains available in the audit trail.",
       ) +
       detailTable([
         {
@@ -1112,7 +1148,7 @@ export async function sendCoiCorrectionNotification(
         `Dear ${escapeHtml(name)},`,
       ) +
       paragraph(
-        "An administrator has corrected your conflict-of-interest declaration. The original declaration remains preserved in the immutable revision and audit history.",
+        "An administrator has corrected your conflict-of-interest declaration. The previous declaration remains available in the audit trail.",
       ) +
       detailTable([
         {
@@ -1227,7 +1263,7 @@ export async function sendDocumentAddedNotification(
           `Dear ${escapeHtml(recipient.name)},`,
         ) +
         paragraph(
-          "A new committee document has been added to the Nairobi Club Committee Register.",
+          "A new document is available in the Nairobi Club Committee Register.",
         ) +
         detailTable(
           rows,

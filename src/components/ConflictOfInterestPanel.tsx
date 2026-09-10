@@ -141,7 +141,7 @@ function statusLabel(status: COIStatus): string {
     return "Conflict declared";
   }
 
-  return "Declaration not submitted";
+  return "Not submitted";
 }
 
 function statusClasses(status: COIStatus): string {
@@ -336,15 +336,15 @@ export default function ConflictOfInterestPanel({
       setData(payload);
       setMessage(
         payload.warnings?.length
-          ? `Conflict-of-interest record saved. ${payload.warnings.join(" ")}`
-          : "Conflict-of-interest record saved.",
+          ? `Declaration saved. ${payload.warnings.join(" ")}`
+          : "Declaration saved.",
       );
       resetEditor();
     } catch (error) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : "Unable to save conflict-of-interest declaration.",
+          : "We couldn't save this declaration.",
       );
     } finally {
       setWorking(false);
@@ -373,19 +373,18 @@ export default function ConflictOfInterestPanel({
 
   if (initialLoading) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
         <p className="text-sm text-slate-500">
-          Loading conflict-of-interest registerÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦
-        </p>
+          Loading conflict-of-interest register...</p>
       </section>
     );
   }
 
   if (!data) {
     return (
-      <section className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
+      <section className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-800">
         {errorMessage ||
-          "Conflict-of-interest register is unavailable."}
+          "The conflict-of-interest register is unavailable right now."}
       </section>
     );
   }
@@ -401,25 +400,21 @@ export default function ConflictOfInterestPanel({
     !ownRow.declaration;
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="border-b border-slate-200 px-6 py-5">
         <div className="flex flex-col justify-between gap-3 md:flex-row md:items-start">
           <div>
             <h3 className="font-semibold">
-              Conflict of Interest
+              Conflict of interest
             </h3>
             <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-500">
-              One declaration applies to the
-              whole meeting. Agenda references
-              identify affected items.
-              Declarations lock when the meeting
-              closes.
+              Complete one declaration for the meeting. If a conflict relates to specific agenda items, select them below.
             </p>
           </div>
 
           {data.viewer.isChair && (
             <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-              Chair view
+              Chair
             </span>
           )}
         </div>
@@ -440,12 +435,10 @@ export default function ConflictOfInterestPanel({
       {canSelfDeclare && (
         <div className="border-b border-slate-100 p-6">
           <p className="text-sm font-semibold text-slate-900">
-            Your declaration is required
+            Your declaration
           </p>
           <p className="mt-1 text-sm text-slate-500">
-            Confirm that you have no conflict,
-            or declare the conflict before the
-            meeting is closed.
+            Please confirm whether you have a conflict of interest before the meeting closes.
           </p>
 
           <div className="mt-4 flex flex-wrap gap-2">
@@ -493,8 +486,7 @@ export default function ConflictOfInterestPanel({
                   {row.user.name}
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  {row.user.membershipRole} ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â·
-                  Attendance:{" "}
+                  {row.user.membershipRole} · Attendance:{" "}
                   {row.attendanceStatus ??
                     "Not recorded"}
                 </p>
@@ -775,7 +767,7 @@ export default function ConflictOfInterestPanel({
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
               {working
-                ? "SavingÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦"
+                ? "Saving..."
                 : "Save declaration"}
             </button>
           </div>
@@ -783,10 +775,7 @@ export default function ConflictOfInterestPanel({
       )}
 
       <div className="border-t border-slate-100 px-6 py-4 text-xs text-slate-400">
-        Meeting timezone: {timezone}.
-        Corrections create new immutable
-        revisions; original declarations are
-        retained.
+        Meeting timezone: {timezone}. Any correction is recorded in the audit trail.
       </div>
     </section>
   );

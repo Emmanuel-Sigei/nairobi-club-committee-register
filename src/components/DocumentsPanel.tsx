@@ -149,7 +149,7 @@ export default function DocumentsPanel({
       setErrorMessage(
         cause instanceof Error
           ? cause.message
-          : "Unable to load documents.",
+          : "We couldn't load the documents.",
       );
     } finally {
       setLoading(false);
@@ -171,7 +171,7 @@ export default function DocumentsPanel({
         setErrorMessage(
           cause instanceof Error
             ? cause.message
-            : "Unable to load documents.",
+            : "We couldn't load the documents.",
         );
       })
       .finally(() => {
@@ -190,7 +190,7 @@ export default function DocumentsPanel({
   async function upload() {
     if (!file || !title.trim()) {
       setErrorMessage(
-        "Document title and file are required.",
+        "Enter a document title and choose a file.",
       );
       return;
     }
@@ -230,7 +230,7 @@ export default function DocumentsPanel({
 
       if (!putResponse.ok) {
         throw new Error(
-          "The file could not be uploaded to document storage.",
+          "We couldn't upload this file. Please try again.",
         );
       }
 
@@ -252,7 +252,7 @@ export default function DocumentsPanel({
 
       setTitle("");
       setFile(null);
-      setMessage("Document uploaded successfully.");
+      setMessage("Document uploaded.");
       await load();
     } catch (cause) {
       setErrorMessage(
@@ -300,13 +300,13 @@ export default function DocumentsPanel({
       setErrorMessage(
         cause instanceof Error
           ? cause.message
-          : "Unable to access document.",
+          : "We couldn't open this document.",
       );
     }
   }
 
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-4 border-b border-slate-200 px-6 py-5 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -318,7 +318,7 @@ export default function DocumentsPanel({
             )}
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Controlled committee records. Document access is authenticated and logged.
+            Minutes, papers and supporting documents for this committee. Every view and download is recorded.
           </p>
         </div>
       </div>
@@ -376,7 +376,7 @@ export default function DocumentsPanel({
           </div>
 
           <p className="mt-3 text-xs text-slate-500">
-            Uploading the same title creates a new immutable version.
+            Uploading the same document title saves it as a new version.
           </p>
         </div>
       )}
@@ -452,7 +452,7 @@ export default function DocumentsPanel({
         </div>
       ) : (
         <div className="p-8 text-center text-sm text-slate-500">
-          No documents have been added yet.
+          No documents yet. Minutes, papers and supporting files will appear here.
         </div>
       )}
     </section>

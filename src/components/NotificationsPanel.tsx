@@ -163,7 +163,7 @@ export default function NotificationsPanel() {
           setErrorMessage(
             caught instanceof Error
               ? caught.message
-              : "Unable to load notifications.",
+              : "We couldn't load your notifications.",
           );
         } finally {
           setLoading(false);
@@ -201,7 +201,7 @@ export default function NotificationsPanel() {
       setErrorMessage(
         caught instanceof Error
           ? caught.message
-          : "Unable to mark notifications as read.",
+          : "We couldn't mark your notifications as read.",
       );
     } finally {
       setWorking(false);
@@ -242,7 +242,7 @@ export default function NotificationsPanel() {
       setErrorMessage(
         caught instanceof Error
           ? caught.message
-          : "Unable to open notification.",
+          : "We couldn't open that notification.",
       );
       setWorking(false);
     }
@@ -252,12 +252,12 @@ export default function NotificationsPanel() {
     <div className="space-y-6">
       <section className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
             Notifications
           </p>
 
-          <h2 className="mt-2 text-3xl font-semibold">
-            In-app notifications
+          <h2 className="mt-2 text-[26px] font-semibold">
+            Notifications
           </h2>
 
           <p className="mt-2 text-sm text-slate-600">
@@ -303,7 +303,7 @@ export default function NotificationsPanel() {
         </div>
       )}
 
-      <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {loading ? (
           <div className="p-10 text-center text-sm text-slate-500">
             Loading notifications...
@@ -312,10 +312,10 @@ export default function NotificationsPanel() {
           0 ? (
           <div className="p-10 text-center">
             <h3 className="font-semibold">
-              No notifications
+              You're all caught up
             </h3>
             <p className="mt-2 text-sm text-slate-500">
-              Meeting lifecycle notifications will appear here.
+              New meeting and committee updates will appear here.
             </p>
           </div>
         ) : (
@@ -362,12 +362,6 @@ export default function NotificationsPanel() {
                       <p className="mt-2 text-sm text-slate-600">
                         {
                           notification.body
-                        }
-                      </p>
-
-                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.1em] text-slate-400">
-                        {
-                          notification.kind
                         }
                       </p>
                     </div>

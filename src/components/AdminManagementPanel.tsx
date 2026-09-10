@@ -295,7 +295,7 @@ export default function AdminManagementPanel({
           setErrorMessage(
             caught instanceof Error
               ? caught.message
-              : "Unable to load administration data.",
+              : "We couldn't load the administration area.",
           );
         } finally {
           setLoading(false);
@@ -322,7 +322,7 @@ export default function AdminManagementPanel({
     setErrorMessage(
       caught instanceof Error
         ? caught.message
-        : "Unable to complete the action.",
+        : "We couldn't complete that action.",
     );
   }
 
@@ -348,7 +348,7 @@ export default function AdminManagementPanel({
       !invite.committeeId
     ) {
       setErrorMessage(
-        "A Member invitation requires an initial committee membership.",
+        "Members must be assigned to at least one committee.",
       );
       return;
     }
@@ -358,7 +358,7 @@ export default function AdminManagementPanel({
       !invite.startDate
     ) {
       setErrorMessage(
-        "Membership start date is required.",
+        "Please choose a start date.",
       );
       return;
     }
@@ -416,7 +416,7 @@ export default function AdminManagementPanel({
       });
 
       setMessage(
-        "Invitation sent successfully.",
+        "Invitation sent.",
       );
 
       await load();
@@ -439,7 +439,7 @@ export default function AdminManagementPanel({
       !membership.startDate
     ) {
       setErrorMessage(
-        "User, committee and start date are required.",
+        "Choose a user, committee and start date.",
       );
       return;
     }
@@ -481,7 +481,7 @@ export default function AdminManagementPanel({
       });
 
       setMessage(
-        "Membership added.",
+        "Committee appointment added.",
       );
 
       await load();
@@ -528,7 +528,7 @@ export default function AdminManagementPanel({
   ) {
     if (
       !window.confirm(
-        `Deactivate ${user.name}? Active sessions will be revoked immediately.`,
+        `Deactivate ${user.name}? They will be signed out immediately and will no longer have access.`,
       )
     ) {
       return;
@@ -588,7 +588,7 @@ export default function AdminManagementPanel({
       );
 
       setMessage(
-        "Membership ended.",
+        "Committee appointment ended.",
       );
 
       await load();
@@ -645,7 +645,7 @@ export default function AdminManagementPanel({
       );
 
       setMessage(
-        "Membership role updated.",
+        "Committee role updated.",
       );
 
       await load();
@@ -667,7 +667,7 @@ export default function AdminManagementPanel({
       !committeeForm.slug.trim()
     ) {
       setErrorMessage(
-        "Committee name and slug are required.",
+        "Committee name and short code are required.",
       );
       return;
     }
@@ -754,7 +754,7 @@ export default function AdminManagementPanel({
 
     const calendarId =
       window.prompt(
-        "Zoho Calendar ID. Leave blank to clear it.",
+        "Calendar ID. Leave blank to remove it.",
         committee.zohoCalendarId ??
           "",
       );
@@ -812,7 +812,7 @@ export default function AdminManagementPanel({
   ) {
     if (
       !window.confirm(
-        `Archive ${committee.name}? New meetings and memberships will be blocked.`,
+        `Archive ${committee.name}? New meetings and committee appointments will be disabled.`,
       )
     ) {
       return;
@@ -867,7 +867,7 @@ export default function AdminManagementPanel({
 
   if (loading) {
     return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white p-10 text-center text-sm text-slate-500 shadow-sm">
         Loading administration...
       </section>
     );
@@ -876,16 +876,16 @@ export default function AdminManagementPanel({
   return (
     <div className="space-y-8">
       <section>
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
           Administration
         </p>
 
-        <h2 className="mt-2 text-3xl font-semibold">
-          Members, memberships and committees
+        <h2 className="mt-2 text-[26px] font-semibold">
+          People & committees
         </h2>
 
         <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-          Manage invitations, committee terms, account deactivation and committee configuration.
+          Invite users, manage committee appointments and keep committee settings up to date.
         </p>
       </section>
 
@@ -906,7 +906,7 @@ export default function AdminManagementPanel({
           onSubmit={
             submitInvite
           }
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <h3 className="font-semibold">
             Invite user
@@ -984,7 +984,7 @@ export default function AdminManagementPanel({
 
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                Application role
+                Access level
               </span>
               <select
                 className={
@@ -1026,7 +1026,7 @@ export default function AdminManagementPanel({
 
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                Initial committee
+                Committee
               </span>
               <select
                 className={
@@ -1055,7 +1055,7 @@ export default function AdminManagementPanel({
                 }
               >
                 <option value="">
-                  No initial committee
+                  Add committee later
                 </option>
                 {activeCommittees.map(
                   (
@@ -1210,14 +1210,14 @@ export default function AdminManagementPanel({
           onSubmit={
             submitMembership
           }
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <h3 className="font-semibold">
-            Add committee membership
+            Add committee appointment
           </h3>
 
           <p className="mt-1 text-sm text-slate-500">
-            Add an additional dated committee term to an active user.
+            Assign an active user to another committee and set the appointment dates.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -1450,7 +1450,7 @@ export default function AdminManagementPanel({
         </form>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-6 py-5">
           <h3 className="font-semibold">
             User directory
@@ -1637,7 +1637,7 @@ export default function AdminManagementPanel({
           onSubmit={
             createCommittee
           }
-          className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+          className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
         >
           <h3 className="font-semibold">
             Create committee
@@ -1677,9 +1677,7 @@ export default function AdminManagementPanel({
             </label>
 
             <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                Slug
-              </span>
+              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">Short code</span>
               <input
                 className={
                   inputClass
@@ -1862,7 +1860,7 @@ export default function AdminManagementPanel({
           </div>
         </form>
 
-        <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="border-b border-slate-200 px-6 py-5">
             <h3 className="font-semibold">
               Committee configuration
