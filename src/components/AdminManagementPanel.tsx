@@ -260,8 +260,6 @@ export default function AdminManagementPanel({
           | "MAIN"
           | "SUBCOMMITTEE",
       parentId: "",
-      zohoCalendarId:
-        "",
     });
 
   const load =
@@ -706,9 +704,6 @@ export default function AdminManagementPanel({
                   "SUBCOMMITTEE"
                   ? committeeForm.parentId
                   : undefined,
-              zohoCalendarId:
-                committeeForm.zohoCalendarId.trim() ||
-                undefined,
             }),
         },
       );
@@ -719,12 +714,10 @@ export default function AdminManagementPanel({
         type:
           "SUBCOMMITTEE",
         parentId: "",
-        zohoCalendarId:
-          "",
       });
 
       setMessage(
-        "Committee created.",
+        "Committee created and calendar connected.",
       );
 
       await load();
@@ -746,22 +739,7 @@ export default function AdminManagementPanel({
       );
 
     if (
-      nextName ===
-      null
-    ) {
-      return;
-    }
-
-    const calendarId =
-      window.prompt(
-        "Calendar ID. Leave blank to remove it.",
-        committee.zohoCalendarId ??
-          "",
-      );
-
-    if (
-      calendarId ===
-      null
+      nextName === null
     ) {
       return;
     }
@@ -787,15 +765,12 @@ export default function AdminManagementPanel({
             JSON.stringify({
               name:
                 nextName.trim(),
-              zohoCalendarId:
-                calendarId.trim() ||
-                null,
             }),
         },
       );
 
       setMessage(
-        "Committee updated.",
+        "Committee and calendar updated.",
       );
 
       await load();
@@ -1643,6 +1618,10 @@ export default function AdminManagementPanel({
             Create committee
           </h3>
 
+          <p className="mt-1 text-sm text-slate-500">
+            A private Nairobi Club calendar is created and connected automatically.
+          </p>
+
           <div className="mt-5 space-y-4">
             <label className="block">
               <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
@@ -1812,37 +1791,7 @@ export default function AdminManagementPanel({
               </label>
             )}
 
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
-                Zoho Calendar ID
-              </span>
-              <input
-                className={
-                  inputClass
-                }
-                value={
-                  committeeForm.zohoCalendarId
-                }
-                disabled={
-                  working
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setCommitteeForm(
-                    (
-                      current,
-                    ) => ({
-                      ...current,
-                      zohoCalendarId:
-                        event
-                          .target
-                          .value,
-                    }),
-                  )
-                }
-              />
-            </label>
+
           </div>
 
           <div className="mt-5">
@@ -1900,7 +1849,7 @@ export default function AdminManagementPanel({
                     </div>
 
                     <p className="mt-1 text-xs text-slate-500">
-                      {committee.slug} - Calendar: {committee.zohoCalendarId || "not configured"}
+                      {committee.slug} | {committee.zohoCalendarId ? "Calendar connected" : "Calendar pending"}
                     </p>
                   </div>
 
