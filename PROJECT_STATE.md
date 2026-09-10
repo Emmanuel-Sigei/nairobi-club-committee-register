@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-INFRASTRUCTURE I2C COMPLETE - Neon main initialized; initial Administrator bootstrapped; Zoho Mail SMTP and Zoho Calendar OAuth validated; automatic committee calendar provisioning validated. Remaining: live application authentication/OTP, Cloudflare R2, Vercel deployment and focused UAT.
+INFRASTRUCTURE I3A COMPLETE - Neon main, Zoho Mail SMTP, Zoho Calendar OAuth, automatic committee calendar provisioning and Cloudflare R2 core storage validated. Remaining: Vercel environment/deployment, production R2 CORS origin, live authentication/OTP and focused UAT.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -71,7 +71,7 @@ INFRASTRUCTURE I2C COMPLETE - Neon main initialized; initial Administrator boots
 - [x] Authenticated signed GET route.
 - [x] View/download/denied access logging.
 - [x] Archived display state after close.
-- [ ] R2 bucket/CORS/runtime validation deferred to infrastructure phase.
+- [x] R2 bucket, localhost CORS and signed PUT/GET runtime validation completed.
 
 ## Stage 6
 - [x] Invite.
@@ -103,7 +103,7 @@ INFRASTRUCTURE I2C COMPLETE - Neon main initialized; initial Administrator boots
 
 ## Open questions / blockers
 - Live Administrator login, email OTP, authenticated session and logout remain to be validated against the deployed application runtime.
-- Cloudflare R2 bucket, CORS and document runtime validation remain.
+- Cloudflare R2 core storage is validated; production Vercel origin must still be added to the bucket CORS policy after deployment.
 - Vercel environment configuration and first deployment remain.
 - End-to-end Zoho RSVP synchronization remains to be validated with a real committee meeting.
 - Dependency security review must be repeated before production go-live.
@@ -260,7 +260,7 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [ ] Live authentication/OTP validation.
 - [x] Zoho Mail runtime validation.
 - [x] Zoho Calendar runtime validation.
-- [ ] Cloudflare R2 runtime validation.
+- [x] Cloudflare R2 core runtime validation.
 - [ ] Vercel runtime/deployment validation.
 ## Infrastructure I2A - Initial Administrator bootstrap
 
@@ -302,3 +302,20 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [x] Live temporary Calendar create, rename and delete lifecycle validated.
 - [x] Temporary validation Calendar confirmed removed after testing.
 - [x] No real committee records exist yet; production committee creation will use the automatic provisioning workflow.
+
+
+## Infrastructure I3A - Cloudflare R2
+
+- [x] Dedicated private bucket provisioned: nairobi-club-committee-register-documents.
+- [x] Public bucket access remains disabled.
+- [x] Bucket-scoped S3-compatible credentials configured locally.
+- [x] R2 endpoint validated against the Cloudflare Account ID.
+- [x] Localhost browser CORS preflight validated for PUT with Content-Type.
+- [x] Presigned PUT upload validated live.
+- [x] Uploaded object Content-Type and size validated.
+- [x] Presigned GET document retrieval validated live.
+- [x] Temporary validation object deleted.
+- [x] Object absence confirmed after cleanup.
+- [x] No application code change was required for R2 core provisioning.
+- [ ] Add the exact Vercel production application origin to R2 CORS after deployment.
+- [ ] Validate a real authenticated document upload/view/download through the deployed application.
