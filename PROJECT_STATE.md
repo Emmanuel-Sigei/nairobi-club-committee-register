@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-INFRASTRUCTURE I1 COMPLETE - Neon main initialized and verified; first Administrator bootstrap and provider runtime validation remain.
+INFRASTRUCTURE I2A COMPLETE - Neon main initialized and initial Administrator bootstrapped; Zoho Mail configuration and live authentication/OTP validation remain.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -256,9 +256,20 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [x] Future-dated memberships cannot be ended before their start date.
 - [x] Inactive-user and archived-committee memberships cannot be reopened.
 - [x] Prisma validation, ESLint, TypeScript and production build passed after correction.
-- [ ] First Administrator bootstrap.
+- [x] First Administrator bootstrap.
 - [ ] Live authentication/OTP validation.
 - [ ] Zoho Mail runtime validation.
 - [ ] Zoho Calendar runtime validation.
 - [ ] Cloudflare R2 runtime validation.
 - [ ] Vercel runtime/deployment validation.
+## Infrastructure I2A - Initial Administrator bootstrap
+
+- [x] Neon main migration state verified current before bootstrap.
+- [x] Bootstrap permitted only because the User table was empty.
+- [x] Initial Administrator created directly in Neon main.
+- [x] Password stored using the application bcrypt 12-round policy.
+- [x] Administrator account created active with passwordSetAt populated.
+- [x] INITIAL_ADMIN_BOOTSTRAPPED immutable SYSTEM audit event created atomically.
+- [x] Exactly one user verified after bootstrap.
+- [ ] Zoho Mail runtime configuration required before login OTP can complete.
+- [ ] Live Administrator login/password/OTP/session validation.
