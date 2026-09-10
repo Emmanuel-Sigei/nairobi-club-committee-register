@@ -17,7 +17,7 @@ React + Vite + Tailwind CSS; Prisma + Neon PostgreSQL; Vercel serverless functio
 - Windows / PowerShell commands only.
 
 ## Current stage
-ARCHITECTURE FROZEN - approved with documented Prisma CLI/tooling security exception; infrastructure provisioning and runtime validation remain.
+INFRASTRUCTURE I1 COMPLETE - Neon main initialized and verified; first Administrator bootstrap and provider runtime validation remain.
 
 ## Stage 1
 - [x] Email/password + email OTP flow exists.
@@ -238,3 +238,27 @@ Security exception:
 Architecture is frozen.
 
 Remaining work is infrastructure provisioning, migrations, provider configuration, focused automated governance tests, and end-to-end runtime/UAT validation.
+## Infrastructure I1 - Neon main initialization
+
+- [x] Initial Prisma migration generated and reviewed locally.
+- [x] Immutable governance trigger migration packaged separately.
+- [x] Neon main direct/unpooled migration connection configured.
+- [x] Neon main confirmed empty before initialization.
+- [x] `0_initial_schema` deployed successfully.
+- [x] `1_immutable_governance` deployed successfully.
+- [x] Prisma migration history verified current.
+- [x] Deployed relational schema matches the frozen Prisma schema.
+- [x] AuditEvent immutable trigger verified active.
+- [x] AttendanceCorrection immutable trigger verified active.
+- [x] MeetingConflictOfInterestRevision immutable trigger verified active.
+- [x] No unresolved or unexpected Prisma migration records.
+- [x] Membership PATCH term-overlap integrity corrected.
+- [x] Future-dated memberships cannot be ended before their start date.
+- [x] Inactive-user and archived-committee memberships cannot be reopened.
+- [x] Prisma validation, ESLint, TypeScript and production build passed after correction.
+- [ ] First Administrator bootstrap.
+- [ ] Live authentication/OTP validation.
+- [ ] Zoho Mail runtime validation.
+- [ ] Zoho Calendar runtime validation.
+- [ ] Cloudflare R2 runtime validation.
+- [ ] Vercel runtime/deployment validation.
