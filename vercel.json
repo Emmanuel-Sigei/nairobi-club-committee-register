@@ -1,5 +1,46 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
+    {
+      "source": "/api/auth/:ncRoute",
+      "destination": "/api/auth"
+    },
+    {
+      "source": "/api/committees/:ncId",
+      "destination": "/api/committees"
+    },
+    {
+      "source": "/api/documents/:ncId/access",
+      "destination": "/api/documents"
+    },
+    {
+      "source": "/api/documents/:ncRoute",
+      "destination": "/api/documents"
+    },
+    {
+      "source": "/api/exco/:ncRoute",
+      "destination": "/api/exco"
+    },
+    {
+      "source": "/api/meetings/:ncId/:ncRoute",
+      "destination": "/api/meetings"
+    },
+    {
+      "source": "/api/meetings/:ncId",
+      "destination": "/api/meetings"
+    },
+    {
+      "source": "/api/memberships/:ncId",
+      "destination": "/api/memberships"
+    },
+    {
+      "source": "/api/notifications/:ncId",
+      "destination": "/api/notifications"
+    },
+    {
+      "source": "/api/users/:ncId/:ncRoute",
+      "destination": "/api/users"
+    },
     {
       "source": "/meetings/:path*",
       "destination": "/"
