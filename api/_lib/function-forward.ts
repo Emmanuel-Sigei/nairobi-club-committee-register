@@ -1,50 +1,4 @@
-function requestBaseUrl(
-  request: Request,
-): string {
-  const configured =
-    process.env.APP_URL
-      ?.trim();
-
-  if (configured) {
-    try {
-      return new URL(
-        configured,
-      ).origin;
-    } catch {
-      // Fall through to forwarded request headers.
-    }
-  }
-
-  const forwardedProto =
-    request.headers
-      .get(
-        "x-forwarded-proto",
-      )
-      ?.split(",")[0]
-      ?.trim();
-
-  const forwardedHost =
-    request.headers
-      .get(
-        "x-forwarded-host",
-      )
-      ?.split(",")[0]
-      ?.trim();
-
-  const host =
-    forwardedHost ||
-    request.headers
-      .get("host")
-      ?.trim();
-
-  if (host) {
-    return `${forwardedProto || "https"}://${host}`;
-  }
-
-  return "http://localhost";
-}
-
-export function resolvedRequestUrl(
+function resolvedRequestUrl(
   request: Request,
 ): URL {
   try {
@@ -52,11 +6,13 @@ export function resolvedRequestUrl(
       request.url,
     );
   } catch {
+    const configured =
+      process.env.APP_URL?.trim() ||
+      "https://governance.nairobiclub.com";
+
     return new URL(
       request.url,
-      requestBaseUrl(
-        request,
-      ),
+      configured,
     );
   }
 }
@@ -108,10 +64,7 @@ export async function forwardRequest(
   url.pathname =
     pathname;
 
-  for (
-    const parameter of
-      internalParameters
-  ) {
+  for (const parameter of internalParameters) {
     url.searchParams.delete(
       parameter,
     );
