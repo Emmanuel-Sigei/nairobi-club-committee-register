@@ -5,7 +5,7 @@ import {
   routingParameter,
 } from "./_lib/function-forward.js";
 
-export default async function handler(
+async function handler(
   request: Request,
 ): Promise<Response> {
   const route =
@@ -32,3 +32,13 @@ export default async function handler(
     forwarded,
   );
 }
+
+export {
+  handler as DELETE,
+  handler as GET,
+  handler as HEAD,
+  handler as OPTIONS,
+  handler as PATCH,
+  handler as POST,
+  handler as PUT,
+};
