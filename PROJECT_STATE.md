@@ -350,3 +350,28 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [ ] Live Administrator forgot-password OTP UAT.
 - [ ] Live first-time invitation UAT.
 - [ ] Live bulk Committee/Subcommittee onboarding UAT.
+## Final Production UI Pass
+
+- [x] Document View/Download routing repaired and deployed before UI pass.
+- [x] ESLint excludes generated Vercel build output.
+- [x] Final lint gate requires zero warnings, including after Vercel production build.
+- [x] User-facing product identity standardized as Nairobi Club Governance Portal.
+- [x] Global typography changed from Segoe UI to Manrope with system fallbacks.
+- [x] Excessive uppercase labels and wide positive letter-spacing removed from the rendered portal.
+- [x] BeaconFold-inspired editorial hierarchy adopted: concise contextual labels, strong headings, restrained chrome and content-led layout.
+- [x] Nairobi Club navy/gold institutional identity retained.
+- [x] Sticky compact desktop/mobile navigation implemented.
+- [x] Signed-in Home rebuilt as an information-rich operational dashboard.
+- [x] Home surfaces next meeting, meeting workload, unread updates, committees and role-aware quick actions.
+- [x] Meetings directory redesigned.
+- [x] Meeting detail hierarchy redesigned without changing meeting governance logic.
+- [x] Committee directory redesigned.
+- [x] Document library redesigned with clearer version history and explicit View/Download actions.
+- [x] Notifications redesigned as an Updates activity stream.
+- [x] Login, OTP, password reset and first-time activation presentation refreshed.
+- [x] Shared application controls, forms, modals, cards and status badges standardized.
+- [x] Attendance, COI, Reports and Administration inherit the final design system without changing authorization or governance behaviour.
+- [x] Responsive layouts preserved for desktop, tablet and mobile.
+- [x] No database migration required.
+- [x] Consolidated Vercel Function architecture remains at 10 Functions.
+- [ ] Final browser visual UAT on representative desktop and mobile devices.

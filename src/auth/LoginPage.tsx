@@ -739,8 +739,8 @@ export default function LoginPage() {
                 : "Your Nairobi Club Governance Portal account is ready.";
 
   return (
-    <main className="min-h-screen bg-[#F4F6F8] px-4 py-8 sm:px-6 lg:flex lg:items-center">
-      <section className="mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl lg:grid-cols-[1.15fr_0.85fr]">
+    <main className="min-h-screen bg-[#F5F4EF] px-4 py-8 sm:px-6 lg:flex lg:items-center">
+      <section className="mx-auto grid w-full max-w-[1180px] overflow-hidden rounded-[20px] border border-[#E4E4DF] bg-white shadow-[0_24px_70px_rgba(7,23,42,0.10)] lg:grid-cols-[1.15fr_0.85fr]">
         <div className="hidden bg-[#0B1F3A] p-12 text-white lg:flex lg:min-h-[680px] lg:flex-col lg:justify-between">
           <div>
             <div className="flex items-center gap-4">
@@ -763,13 +763,13 @@ export default function LoginPage() {
 
             <div className="mt-24 max-w-xl">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#D8BC7A]">
-                Committee Governance
+                Governance workspace
               </p>
 
-              <h1 className="mt-4 text-4xl font-semibold leading-tight">
-                Meetings, attendance
+              <h1 className="mt-4 text-[42px] font-semibold leading-[1.05] tracking-[-0.05em]">
+                Governance, clearly
                 <br />
-                and governance records
+                in one place.
               </h1>
 
               <p className="mt-6 max-w-lg text-sm leading-7 text-slate-300">
