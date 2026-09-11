@@ -11,9 +11,7 @@ import {
   resendOtp,
   verifyOtp,
 } from "./auth-api";
-import {
-  useAuth,
-} from "./AuthContext";
+
 import {
   CLUB_LOGO_URL,
 } from "../branding";
@@ -208,10 +206,6 @@ function strongPassword(
 }
 
 export default function LoginPage() {
-  const {
-    refreshUser,
-  } =
-    useAuth();
 
   const invitationToken =
     window.location.pathname ===
@@ -433,7 +427,13 @@ export default function LoginPage() {
         otp,
       );
 
-      await refreshUser();
+      /*
+       * OTP verification creates the authenticated server session
+       * and sends the HttpOnly session cookie. Use a real navigation
+       * so a member arriving through /set-password cannot remain
+       * trapped in the already-mounted authentication screen.
+       */
+      window.location.replace("/");
     } catch (caught) {
       setErrorMessage(
         caught instanceof Error
