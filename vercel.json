@@ -42,6 +42,10 @@
       "destination": "/api/users"
     },
     {
+      "source": "/set-password",
+      "destination": "/"
+    },
+    {
       "source": "/meetings/:path*",
       "destination": "/"
     }

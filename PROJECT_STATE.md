@@ -319,3 +319,34 @@ Remaining work is infrastructure provisioning, migrations, provider configuratio
 - [x] No application code change was required for R2 core provisioning.
 - [ ] Add the exact Vercel production application origin to R2 CORS after deployment.
 - [ ] Validate a real authenticated document upload/view/download through the deployed application.
+## Production Authentication and Committee Onboarding
+
+- [x] Production Vercel Web Handler routing validated.
+- [x] Forgot-password workflow exposed from sign-in.
+- [x] Password recovery uses a 6-digit OTP sent to the registered email address.
+- [x] Password-reset OTP expires after 10 minutes.
+- [x] Password-reset resend throttling implemented.
+- [x] Password-reset verification rate limiting implemented.
+- [x] Successful password reset invalidates existing sessions and outstanding login OTP challenges.
+- [x] Password-reset confirmation email implemented.
+- [x] Show/hide password controls implemented for sign-in, reset and first-time setup.
+- [x] Administrators never create or know member passwords.
+- [x] Invitees confirm their own full name and create their own password.
+- [x] Invitation links expire after 48 hours.
+- [x] Bulk Committee/Subcommittee onboarding implemented from pasted email lists.
+- [x] Email lists are validated and deduplicated.
+- [x] Optional Chair and Secretary designation implemented.
+- [x] Remaining committee invitees default to Member.
+- [x] New users receive individual secure onboarding emails.
+- [x] Pending users receive refreshed invitations without duplicate accounts.
+- [x] Existing active users receive additional committee access without password replacement.
+- [x] Existing overlapping committee appointments are not duplicated.
+- [x] Invitation email explains the Governance Portal, what members use it for and how to activate access.
+- [x] Existing-user committee-access notification email implemented.
+- [x] First-time account setup confirmation email implemented.
+- [x] Bulk onboarding returns per-address results and writes audit history.
+- [x] No Prisma migration required.
+- [x] Existing consolidated Vercel Function architecture preserved.
+- [ ] Live Administrator forgot-password OTP UAT.
+- [ ] Live first-time invitation UAT.
+- [ ] Live bulk Committee/Subcommittee onboarding UAT.

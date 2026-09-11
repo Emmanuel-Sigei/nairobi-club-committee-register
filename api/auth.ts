@@ -1,4 +1,5 @@
 import acceptInvite from "./auth/_accept-invite.js";
+import bulkInvite from "./auth/_bulk-invite.js";
 import invite from "./auth/_invite.js";
 import login from "./auth/_login.js";
 import logout from "./auth/_logout.js";
@@ -26,6 +27,8 @@ async function handler(
   const handlers = {
     "accept-invite":
       acceptInvite,
+    "bulk-invite":
+      bulkInvite,
     "invite":
       invite,
     "login":

@@ -1275,3 +1275,322 @@ export async function sendDocumentAddedNotification(
     });
   }
 }
+
+export interface GovernanceInvitationContext {
+  committeeName?: string;
+  committeeRole?: string;
+}
+
+function governanceRoleLabel(
+  role?: string,
+): string {
+  if (role === "CHAIR") {
+    return "Chair";
+  }
+
+  if (role === "SECRETARY") {
+    return "Secretary";
+  }
+
+  return "Member";
+}
+
+function governancePurposeHtml(): string {
+  return `
+    <div style="
+      margin:22px 0;
+      color:${INK};
+      font-family:'Segoe UI',Arial,Helvetica,sans-serif;
+      font-size:14px;
+      line-height:1.7;
+    ">
+      <div style="
+        margin-bottom:10px;
+        color:${NAVY};
+        font-size:15px;
+        font-weight:700;
+      ">
+        What you will use the Governance Portal for
+      </div>
+
+      <ul style="
+        margin:0;
+        padding-left:22px;
+      ">
+        <li style="margin:7px 0;">
+          View committee and subcommittee meetings and meeting information.
+        </li>
+        <li style="margin:7px 0;">
+          Confirm attendance, check in and submit apologies where applicable.
+        </li>
+        <li style="margin:7px 0;">
+          Complete conflict-of-interest declarations required for committee governance.
+        </li>
+        <li style="margin:7px 0;">
+          Access authorised committee documents and governance records.
+        </li>
+        <li style="margin:7px 0;">
+          Receive committee, meeting and governance notifications.
+        </li>
+        <li style="margin:7px 0;">
+          Maintain an auditable record of attendance and governance actions.
+        </li>
+      </ul>
+    </div>
+  `;
+}
+
+function governanceSetupStepsHtml(): string {
+  return `
+    <div style="
+      margin:22px 0;
+      color:${INK};
+      font-family:'Segoe UI',Arial,Helvetica,sans-serif;
+      font-size:14px;
+      line-height:1.7;
+    ">
+      <div style="
+        margin-bottom:10px;
+        color:${NAVY};
+        font-size:15px;
+        font-weight:700;
+      ">
+        How to get started
+      </div>
+
+      <ol style="
+        margin:0;
+        padding-left:22px;
+      ">
+        <li style="margin:7px 0;">
+          Open the secure account setup link below.
+        </li>
+        <li style="margin:7px 0;">
+          Confirm your full name.
+        </li>
+        <li style="margin:7px 0;">
+          Create your own private password.
+        </li>
+        <li style="margin:7px 0;">
+          Sign in using your registered email address and password.
+        </li>
+        <li style="margin:7px 0;">
+          Enter the email verification code requested during secure sign-in.
+        </li>
+      </ol>
+    </div>
+  `;
+}
+
+export async function sendGovernanceInvitationEmail(
+  email: string,
+  name: string,
+  token: string,
+  context?: GovernanceInvitationContext,
+): Promise<void> {
+  const url =
+    `${appUrl()}/set-password?token=` +
+    encodeURIComponent(
+      token,
+    );
+
+  const committeeDetails =
+    context?.committeeName
+      ? detailTable([
+          {
+            label:
+              "Committee / Subcommittee",
+            value:
+              context.committeeName,
+          },
+          {
+            label:
+              "Committee role",
+            value:
+              governanceRoleLabel(
+                context.committeeRole,
+              ),
+          },
+        ])
+      : "";
+
+  await sendZohoMail({
+    toAddress:
+      email,
+    subject:
+      "Welcome to the Nairobi Club Governance Portal",
+    title:
+      "Complete your Nairobi Club account",
+    preheader:
+      "Your Nairobi Club Governance Portal access is ready for setup.",
+    bodyHtml:
+      paragraph(
+        `Dear ${escapeHtml(name)},`,
+      ) +
+      paragraph(
+        "Nairobi Club has introduced the Governance Portal to support the administration, participation and governance of Club Committees and Subcommittees.",
+      ) +
+      paragraph(
+        "Your registered email address has been authorised for access. You will create your own private password; Nairobi Club administrators do not create, receive or see it.",
+      ) +
+      committeeDetails +
+      governancePurposeHtml() +
+      governanceSetupStepsHtml() +
+      button(
+        url,
+        "Complete account setup",
+      ) +
+      notice(
+        "Invitation validity",
+        "This secure invitation expires in 48 hours. Never share your password or verification codes. If you were not expecting this invitation, contact Nairobi Club ICT.",
+      ),
+  });
+}
+
+export async function sendPasswordResetOtpEmail(
+  email: string,
+  name: string,
+  code: string,
+): Promise<void> {
+  await sendZohoMail({
+    toAddress:
+      email,
+    subject:
+      "Your Nairobi Club password reset code",
+    title:
+      "Reset your Governance Portal password",
+    preheader:
+      "Use this verification code to reset your Nairobi Club Governance Portal password.",
+    bodyHtml:
+      paragraph(
+        `Dear ${escapeHtml(name)},`,
+      ) +
+      paragraph(
+        "A password reset was requested for your Nairobi Club Governance Portal account. Enter the verification code below in the portal, then choose your new password.",
+      ) +
+      otpPanel(
+        code,
+      ) +
+      notice(
+        "Security notice",
+        "This code expires in 10 minutes. If you did not request a password reset, do not share the code and contact Nairobi Club ICT if you have concerns.",
+      ),
+  });
+}
+
+export async function sendGovernancePasswordResetConfirmation(
+  email: string,
+  name: string,
+): Promise<void> {
+  await sendZohoMail({
+    toAddress:
+      email,
+    subject:
+      "Nairobi Club Governance Portal password changed",
+    title:
+      "Password changed successfully",
+    preheader:
+      "Your Governance Portal password has been changed.",
+    bodyHtml:
+      paragraph(
+        `Dear ${escapeHtml(name)},`,
+      ) +
+      paragraph(
+        "Your Nairobi Club Governance Portal password has been changed successfully.",
+      ) +
+      paragraph(
+        "All previous Governance Portal sessions have been invalidated. Sign in again using your new password.",
+      ) +
+      button(
+        appUrl(),
+        "Open Governance Portal",
+      ) +
+      notice(
+        "Account protection",
+        "If you did not make this change, contact Nairobi Club ICT immediately.",
+      ),
+  });
+}
+
+export async function sendAccountSetupConfirmation(
+  email: string,
+  name: string,
+): Promise<void> {
+  await sendZohoMail({
+    toAddress:
+      email,
+    subject:
+      "Your Nairobi Club Governance Portal account is ready",
+    title:
+      "Account setup complete",
+    preheader:
+      "Your Nairobi Club Governance Portal account has been activated.",
+    bodyHtml:
+      paragraph(
+        `Dear ${escapeHtml(name)},`,
+      ) +
+      paragraph(
+        "Your Nairobi Club Governance Portal account has been activated successfully.",
+      ) +
+      paragraph(
+        "You can now sign in using your registered email address and the password you created. Secure sign-in also uses a 6-digit verification code sent to your registered email address.",
+      ) +
+      button(
+        appUrl(),
+        "Sign in to Governance Portal",
+      ) +
+      notice(
+        "Account security",
+        "Never share your password or verification codes. Nairobi Club administrators will never ask you to provide your password.",
+      ),
+  });
+}
+
+export async function sendCommitteeAccessEmail(
+  email: string,
+  name: string,
+  committeeName: string,
+  committeeRole: string,
+): Promise<void> {
+  await sendZohoMail({
+    toAddress:
+      email,
+    subject:
+      `Nairobi Club Governance Portal access - ${committeeName}`,
+    title:
+      "Committee access added",
+    preheader:
+      `You now have Governance Portal access for ${committeeName}.`,
+    bodyHtml:
+      paragraph(
+        `Dear ${escapeHtml(name)},`,
+      ) +
+      paragraph(
+        "Your existing Nairobi Club Governance Portal account has been granted access to the committee or subcommittee shown below.",
+      ) +
+      detailTable([
+        {
+          label:
+            "Committee / Subcommittee",
+          value:
+            committeeName,
+        },
+        {
+          label:
+            "Committee role",
+          value:
+            governanceRoleLabel(
+              committeeRole,
+            ),
+        },
+      ]) +
+      governancePurposeHtml() +
+      paragraph(
+        "You do not need to create another account or password. Continue using your existing Governance Portal credentials.",
+      ) +
+      button(
+        appUrl(),
+        "Open Governance Portal",
+      ),
+  });
+}

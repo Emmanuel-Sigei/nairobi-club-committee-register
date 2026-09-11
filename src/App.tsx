@@ -348,4 +348,21 @@ function CommitteesView({
 }
 
 function AuthenticatedApp() { const { user, loading, logout } = useAuth(); const [activeTab, setActiveTab] = useState<ActiveTab>(window.location.pathname.startsWith("/meetings/") ? "meetings" : "overview"); const [meetings, setMeetings] = useState<Meeting[]>([]); const [committees, setCommittees] = useState<Committee[]>([]); const [loadingData, setLoadingData] = useState(false); const [dataError, setDataError] = useState(""); const [showCreate, setShowCreate] = useState(false); const loadData = useCallback(async () => { if (!user) return; setLoadingData(true); setDataError(""); try { const [m, c] = await Promise.all([apiRequest<ApiResponse<Meeting[]>>("/api/meetings"), apiRequest<ApiResponse<Committee[]>>("/api/committees")]); setMeetings(Array.isArray(m.meetings) ? m.meetings : []); setCommittees(Array.isArray(c.committees) ? c.committees : []); } catch (e) { setDataError(e instanceof Error ? e.message : "Unable to load application data."); } finally { setLoadingData(false); } }, [user]); useEffect(() => { if (user) void Promise.resolve().then(() => loadData()); }, [user, loadData]); if (loading) return <main className="flex min-h-screen items-center justify-center bg-slate-950 text-white"><p className="text-sm text-slate-300">Loading Committee Register...</p></main>; if (!user) return <LoginPage />; const refresh = async () => { await loadData(); }; return <main className="min-h-screen bg-slate-50 text-slate-950"><Header user={user} activeTab={activeTab} onTabChange={(tab) => { setShowCreate(false); setActiveTab(tab); }} onLogout={() => void logout()} /><div className="mx-auto max-w-7xl px-6 py-8">{dataError && <div className="mb-6 flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"><span>{dataError}</span><Button onClick={() => void loadData()}>Retry</Button></div>}{loadingData && meetings.length === 0 ? <div className="rounded-xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500">Loading Committee Register...</div> : showCreate ? <MeetingForm committees={committees} onCancel={() => setShowCreate(false)} onSaved={async () => { await refresh(); setShowCreate(false); setActiveTab("meetings"); }} /> : activeTab === "overview" ? <Overview user={user} meetings={meetings} committees={committees} onMeetings={() => setActiveTab("meetings")} onCreateMeeting={() => setShowCreate(true)} /> : activeTab === "meetings" ? <MeetingsView meetings={meetings} committees={committees} user={user} onRefresh={refresh} onCreate={() => setShowCreate(true)} /> : activeTab === "committees" ? <CommitteesView committees={committees} user={user} /> : activeTab === "reports" ? <GovernanceReportsPanel /> : activeTab === "notifications" ? <NotificationsPanel /> : activeTab === "admin" && user.role === "ADMIN" ? <AdminManagementPanel currentUserId={user.id} /> : <Overview user={user} meetings={meetings} committees={committees} onMeetings={() => setActiveTab("meetings")} onCreateMeeting={() => setShowCreate(true)} />}</div></main>; }
-export default function App() { return <AuthProvider><AuthenticatedApp /></AuthProvider>; }
+function RoutedApp() {
+  if (
+    window.location.pathname ===
+    "/set-password"
+  ) {
+    return <LoginPage />;
+  }
+
+  return <AuthenticatedApp />;
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <RoutedApp />
+    </AuthProvider>
+  );
+}

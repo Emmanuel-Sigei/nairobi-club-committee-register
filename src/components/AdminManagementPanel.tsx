@@ -1,3 +1,4 @@
+import BulkOnboardingPanel from "./BulkOnboardingPanel";
 import {
   useCallback,
   useEffect,
@@ -876,6 +877,14 @@ export default function AdminManagementPanel({
         </div>
       )}
 
+      <BulkOnboardingPanel
+        committees={
+          activeCommittees
+        }
+        onRefresh={
+          load
+        }
+      />
       <section className="grid gap-6 xl:grid-cols-2">
         <form
           onSubmit={

@@ -6,7 +6,7 @@ import {
 } from "../_lib/db.js";
 import {
   assertZohoMailConfigured,
-  sendInvitationEmail,
+  sendGovernanceInvitationEmail,
 } from "../_lib/email.js";
 import {
   error,
@@ -207,7 +207,7 @@ export default async function handler(
     );
 
   try {
-    await sendInvitationEmail(
+    await sendGovernanceInvitationEmail(
       user.email,
       user.name,
       rawToken,

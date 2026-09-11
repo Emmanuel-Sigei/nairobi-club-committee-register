@@ -1,107 +1,258 @@
 import {
+  useEffect,
   useState,
   type FormEvent,
 } from "react";
 import {
+  acceptInvitation,
+  completePasswordReset,
   login,
+  requestPasswordReset,
   resendOtp,
   verifyOtp,
 } from "./auth-api";
-import { useAuth } from "./AuthContext";
+import {
+  useAuth,
+} from "./AuthContext";
 import {
   CLUB_LOGO_URL,
 } from "../branding";
 
 type Step =
   | "credentials"
-  | "otp";
+  | "otp"
+  | "forgot-email"
+  | "forgot-reset"
+  | "forgot-complete"
+  | "invite"
+  | "invite-complete";
 
-function ShieldIcon() {
+function EyeIcon({
+  visible,
+}: {
+  visible: boolean;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
       aria-hidden="true"
-      className="h-4 w-4"
+      className="h-5 w-5"
       fill="none"
       stroke="currentColor"
       strokeWidth="1.7"
     >
-      <path
-        d="M12 3.5 18 6v5.2c0 4.1-2.5 7.5-6 9.3-3.5-1.8-6-5.2-6-9.3V6l6-2.5Z"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="m9.6 12 1.5 1.5 3.4-3.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
+      {visible ? (
+        <>
+          <path
+            d="M3 12s3.2-5 9-5 9 5 9 5-3.2 5-9 5-9-5-9-5Z"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <circle
+            cx="12"
+            cy="12"
+            r="2.5"
+          />
+        </>
+      ) : (
+        <>
+          <path
+            d="M4 4l16 16"
+            strokeLinecap="round"
+          />
+          <path
+            d="M10.6 7.2A9.4 9.4 0 0 1 12 7c5.8 0 9 5 9 5a15 15 0 0 1-2.5 2.9M6.3 8.3A14.4 14.4 0 0 0 3 12s3.2 5 9 5c1 0 1.9-.1 2.7-.4"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </>
+      )}
     </svg>
   );
 }
 
-function LockIcon() {
+function PasswordField({
+  id,
+  label,
+  value,
+  onChange,
+  autoComplete,
+  hint,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (
+    value: string,
+  ) => void;
+  autoComplete:
+    | "current-password"
+    | "new-password";
+  hint?: string;
+}) {
+  const [
+    visible,
+    setVisible,
+  ] =
+    useState(false);
+
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
+    <label
+      htmlFor={id}
+      className="block"
     >
-      <rect
-        x="6"
-        y="10"
-        width="12"
-        height="10"
-        rx="2"
-      />
-      <path
-        d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"
-        strokeLinecap="round"
-      />
-      <path
-        d="M12 14v2"
-        strokeLinecap="round"
-      />
-    </svg>
+      <span className="mb-2 block text-sm font-semibold text-slate-800">
+        {label}
+      </span>
+
+      <div className="relative">
+        <input
+          id={id}
+          type={
+            visible
+              ? "text"
+              : "password"
+          }
+          autoComplete={
+            autoComplete
+          }
+          value={value}
+          onChange={(
+            event,
+          ) =>
+            onChange(
+              event.target.value,
+            )
+          }
+          required
+          className="h-11 w-full rounded-lg border border-slate-300 bg-white px-3.5 pr-12 text-sm text-slate-900 outline-none transition focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+        />
+
+        <button
+          type="button"
+          onClick={() =>
+            setVisible(
+              (current) =>
+                !current,
+            )
+          }
+          aria-label={
+            visible
+              ? "Hide password"
+              : "Show password"
+          }
+          aria-pressed={
+            visible
+          }
+          className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-slate-400 transition hover:text-[#0B2A50]"
+        >
+          <EyeIcon
+            visible={
+              visible
+            }
+          />
+        </button>
+      </div>
+
+      {hint && (
+        <span className="mt-2 block text-xs leading-5 text-slate-500">
+          {hint}
+        </span>
+      )}
+    </label>
   );
 }
 
-function ArrowIcon() {
+function Feedback({
+  message,
+  error,
+}: {
+  message: string;
+  error: string;
+}) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      aria-hidden="true"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path
-        d="M5 12h14M14 7l5 5-5 5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <>
+      {message && (
+        <div className="rounded-lg border border-[#E4D2A9] bg-[#FAF6EC] px-4 py-3 text-sm leading-6 text-[#654E1D]">
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm leading-6 text-red-800">
+          {error}
+        </div>
+      )}
+    </>
+  );
+}
+
+function strongPassword(
+  value: string,
+): boolean {
+  return (
+    value.length >= 12 &&
+    /[a-z]/.test(
+      value,
+    ) &&
+    /[A-Z]/.test(
+      value,
+    ) &&
+    /\d/.test(
+      value,
+    ) &&
+    /[^A-Za-z0-9]/.test(
+      value,
+    )
   );
 }
 
 export default function LoginPage() {
-  const { refreshUser } =
+  const {
+    refreshUser,
+  } =
     useAuth();
 
-  const [step, setStep] =
-    useState<Step>("credentials");
+  const invitationToken =
+    window.location.pathname ===
+      "/set-password"
+      ? (
+          new URLSearchParams(
+            window.location.search,
+          )
+            .get("token")
+            ?.trim() ??
+          ""
+        )
+      : "";
 
-  const [email, setEmail] =
+  const [
+    step,
+    setStep,
+  ] =
+    useState<Step>(
+      window.location.pathname ===
+        "/set-password"
+        ? "invite"
+        : "credentials",
+    );
+
+  const [
+    email,
+    setEmail,
+  ] =
     useState("");
 
-  const [password, setPassword] =
+  const [
+    password,
+    setPassword,
+  ] =
     useState("");
 
-  const [otp, setOtp] =
+  const [
+    otp,
+    setOtp,
+  ] =
     useState("");
 
   const [
@@ -112,10 +263,34 @@ export default function LoginPage() {
       null,
     );
 
-  const [busy, setBusy] =
+  const [
+    newPassword,
+    setNewPassword,
+  ] =
+    useState("");
+
+  const [
+    confirmPassword,
+    setConfirmPassword,
+  ] =
+    useState("");
+
+  const [
+    inviteName,
+    setInviteName,
+  ] =
+    useState("");
+
+  const [
+    busy,
+    setBusy,
+  ] =
     useState(false);
 
-  const [message, setMessage] =
+  const [
+    message,
+    setMessage,
+  ] =
     useState("");
 
   const [
@@ -124,13 +299,77 @@ export default function LoginPage() {
   ] =
     useState("");
 
+  const [
+    resendSeconds,
+    setResendSeconds,
+  ] =
+    useState(0);
+
+  useEffect(
+    () => {
+      if (
+        resendSeconds <=
+        0
+      ) {
+        return;
+      }
+
+      const timer =
+        window.setTimeout(
+          () =>
+            setResendSeconds(
+              (current) =>
+                Math.max(
+                  0,
+                  current - 1,
+                ),
+            ),
+          1000,
+        );
+
+      return () =>
+        window.clearTimeout(
+          timer,
+        );
+    },
+    [resendSeconds],
+  );
+
+  function clearFeedback() {
+    setMessage("");
+    setErrorMessage("");
+  }
+
+  function goToSignIn() {
+    window.history.replaceState(
+      {},
+      "",
+      "/",
+    );
+
+    setStep(
+      "credentials",
+    );
+
+    setPassword("");
+    setOtp("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setChallengeId(
+      null,
+    );
+
+    clearFeedback();
+  }
+
   async function handleLogin(
-    event: FormEvent,
+    event:
+      FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
+
     setBusy(true);
-    setErrorMessage("");
-    setMessage("");
+    clearFeedback();
 
     try {
       const result =
@@ -151,16 +390,20 @@ export default function LoginPage() {
         result.otpChallengeId,
       );
 
-      setStep("otp");
+      setOtp("");
+
+      setStep(
+        "otp",
+      );
 
       setMessage(
         result.message ??
-          "A verification code has been sent to your email.",
+          "A verification code has been sent to your registered email address.",
       );
-    } catch (error) {
+    } catch (caught) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
+        caught instanceof Error
+          ? caught.message
           : "Unable to sign in.",
       );
     } finally {
@@ -169,7 +412,8 @@ export default function LoginPage() {
   }
 
   async function handleVerify(
-    event: FormEvent,
+    event:
+      FormEvent<HTMLFormElement>,
   ) {
     event.preventDefault();
 
@@ -177,13 +421,11 @@ export default function LoginPage() {
       setErrorMessage(
         "Verification session is missing.",
       );
-
       return;
     }
 
     setBusy(true);
-    setErrorMessage("");
-    setMessage("");
+    clearFeedback();
 
     try {
       await verifyOtp(
@@ -192,10 +434,10 @@ export default function LoginPage() {
       );
 
       await refreshUser();
-    } catch (error) {
+    } catch (caught) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
+        caught instanceof Error
+          ? caught.message
           : "Unable to verify the code.",
       );
     } finally {
@@ -203,14 +445,13 @@ export default function LoginPage() {
     }
   }
 
-  async function handleResend() {
+  async function handleLoginResend() {
     if (!challengeId) {
       return;
     }
 
     setBusy(true);
-    setErrorMessage("");
-    setMessage("");
+    clearFeedback();
 
     try {
       await resendOtp(
@@ -218,12 +459,12 @@ export default function LoginPage() {
       );
 
       setMessage(
-        "A new verification code has been sent.",
+        "A new sign-in verification code has been sent.",
       );
-    } catch (error) {
+    } catch (caught) {
       setErrorMessage(
-        error instanceof Error
-          ? error.message
+        caught instanceof Error
+          ? caught.message
           : "Unable to resend the code.",
       );
     } finally {
@@ -231,315 +472,760 @@ export default function LoginPage() {
     }
   }
 
+  async function handleForgotRequest(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    setBusy(true);
+    clearFeedback();
+
+    try {
+      const result =
+        await requestPasswordReset(
+          email,
+        );
+
+      setOtp("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setResendSeconds(
+        60,
+      );
+
+      setStep(
+        "forgot-reset",
+      );
+
+      setMessage(
+        result.message ??
+          "If the account exists, a reset code has been sent.",
+      );
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to request a password reset.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleResetResend() {
+    if (
+      resendSeconds >
+      0
+    ) {
+      return;
+    }
+
+    setBusy(true);
+    clearFeedback();
+
+    try {
+      const result =
+        await requestPasswordReset(
+          email,
+        );
+
+      setResendSeconds(
+        60,
+      );
+
+      setMessage(
+        result.message ??
+          "A new password reset code has been sent.",
+      );
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to resend the reset code.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePasswordReset(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    clearFeedback();
+
+    if (
+      otp.length !==
+      6
+    ) {
+      setErrorMessage(
+        "Enter the 6-digit verification code.",
+      );
+      return;
+    }
+
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
+      setErrorMessage(
+        "The passwords do not match.",
+      );
+      return;
+    }
+
+    if (
+      !strongPassword(
+        newPassword,
+      )
+    ) {
+      setErrorMessage(
+        "Password must be at least 12 characters and include uppercase, lowercase, a number and a special character.",
+      );
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const result =
+        await completePasswordReset(
+          email,
+          otp,
+          newPassword,
+        );
+
+      setStep(
+        "forgot-complete",
+      );
+
+      setMessage(
+        result.message ??
+          "Your password has been reset successfully.",
+      );
+
+      setPassword("");
+      setOtp("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to reset your password.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleInvitation(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    clearFeedback();
+
+    if (
+      !invitationToken
+    ) {
+      setErrorMessage(
+        "This invitation link is incomplete. Ask an administrator to resend your invitation.",
+      );
+      return;
+    }
+
+    if (
+      inviteName.trim().length <
+      2
+    ) {
+      setErrorMessage(
+        "Enter your full name.",
+      );
+      return;
+    }
+
+    if (
+      newPassword !==
+      confirmPassword
+    ) {
+      setErrorMessage(
+        "The passwords do not match.",
+      );
+      return;
+    }
+
+    if (
+      !strongPassword(
+        newPassword,
+      )
+    ) {
+      setErrorMessage(
+        "Password must be at least 12 characters and include uppercase, lowercase, a number and a special character.",
+      );
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const result =
+        await acceptInvitation(
+          invitationToken,
+          inviteName.trim(),
+          newPassword,
+        );
+
+      window.history.replaceState(
+        {},
+        "",
+        "/",
+      );
+
+      setStep(
+        "invite-complete",
+      );
+
+      setMessage(
+        result.message ??
+          "Your account is ready.",
+      );
+
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (caught) {
+      setErrorMessage(
+        caught instanceof Error
+          ? caught.message
+          : "Unable to complete account setup.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const heading =
+    step === "credentials"
+      ? "Sign in to continue"
+      : step === "otp"
+        ? "Verify your sign-in"
+        : step === "forgot-email"
+          ? "Forgot your password?"
+          : step === "forgot-reset"
+            ? "Create a new password"
+            : step === "forgot-complete"
+              ? "Password reset complete"
+              : step === "invite"
+                ? "Complete your account"
+                : "Account setup complete";
+
+  const description =
+    step === "credentials"
+      ? "Use your Nairobi Club credentials to access the Governance Portal."
+      : step === "otp"
+        ? "Enter the 6-digit verification code sent to your registered email address."
+        : step === "forgot-email"
+          ? "Enter your registered email address and we will send a secure password reset code."
+          : step === "forgot-reset"
+            ? "Enter the code from your email and create a new private password."
+            : step === "forgot-complete"
+              ? "Your new password is active and previous sessions have been invalidated."
+              : step === "invite"
+                ? "Confirm your full name and create your private password. Nairobi Club administrators do not know or set your password."
+                : "Your Nairobi Club Governance Portal account is ready.";
+
   return (
-    <main className="min-h-screen bg-[#F5F6F8] px-4 py-6 sm:px-6 lg:flex lg:items-center lg:px-8">
-      <section className="mx-auto grid w-full max-w-[1180px] overflow-hidden border border-slate-200 bg-white shadow-[0_8px_30px_rgba(15,23,42,0.08)] lg:min-h-[690px] lg:grid-cols-[1.6fr_1fr]">
-        <div className="relative hidden border-r border-slate-200 bg-[#F7F8FA] p-12 lg:flex lg:flex-col lg:justify-between">
+    <main className="min-h-screen bg-[#F4F6F8] px-4 py-8 sm:px-6 lg:flex lg:items-center">
+      <section className="mx-auto grid w-full max-w-6xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="hidden bg-[#0B1F3A] p-12 text-white lg:flex lg:min-h-[680px] lg:flex-col lg:justify-between">
           <div>
             <div className="flex items-center gap-4">
               <img
                 src={CLUB_LOGO_URL}
                 alt="Nairobi Club"
-                className="h-16 w-16 object-contain"
+                className="h-20 w-20 object-contain"
               />
 
               <div>
-                <p className="text-[17px] font-semibold text-[#17365F]">
+                <p className="text-xl font-semibold">
                   Nairobi Club
                 </p>
 
-                <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-[#86682D]">
-                  Committee Register
+                <p className="mt-1 text-xs font-semibold uppercase tracking-[0.2em] text-[#D8BC7A]">
+                  Governance Portal
                 </p>
               </div>
             </div>
 
-            <div className="mt-24 max-w-[520px]">
-              <p className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#355079]">
-                Internal Platform
+            <div className="mt-24 max-w-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#D8BC7A]">
+                Committee Governance
               </p>
 
-              <h1 className="mt-4 text-[36px] font-semibold leading-[1.08] tracking-[-0.035em] text-[#07172A]">
-                Committee Attendance
+              <h1 className="mt-4 text-4xl font-semibold leading-tight">
+                Meetings, attendance
                 <br />
-                &amp; Governance
+                and governance records
               </h1>
 
-              <p className="mt-5 max-w-[470px] text-[15px] leading-7 text-slate-600">
-                Manage committee meetings,
-                attendance, declarations and
-                records through one secure
-                Nairobi Club platform.
+              <p className="mt-6 max-w-lg text-sm leading-7 text-slate-300">
+                A secure Nairobi Club workspace for committee and subcommittee meetings, attendance, apologies, conflict-of-interest declarations, documents and governance records.
               </p>
             </div>
           </div>
 
-          <div className="border-t border-slate-200 pt-5">
-            <div className="grid grid-cols-3 gap-7">
-              <div>
-                <p className="text-[12px] font-semibold text-[#17365F]">
-                  Meetings
-                </p>
-                <p className="mt-2 text-[12px] text-slate-500">
-                  Structured records
-                </p>
-              </div>
-
-              <div>
-                <p className="text-[12px] font-semibold text-[#17365F]">
-                  Attendance
-                </p>
-                <p className="mt-2 text-[12px] text-slate-500">
-                  Verified register
-                </p>
-              </div>
-
-              <div>
-                <p className="text-[12px] font-semibold text-[#17365F]">
-                  Governance
-                </p>
-                <p className="mt-2 text-[12px] text-slate-500">
-                  Traceable declarations
-                </p>
-              </div>
-            </div>
-          </div>
+          <p className="text-xs leading-6 text-slate-400">
+            Access is restricted to authorised Nairobi Club users. Security and governance activity is logged.
+          </p>
         </div>
 
-        <div className="flex flex-col justify-center px-7 py-10 sm:px-12 lg:px-11">
-          <div className="mb-9 flex items-center gap-3 lg:hidden">
-            <img
-              src={CLUB_LOGO_URL}
-              alt="Nairobi Club"
-              className="h-14 w-14 object-contain"
-            />
+        <div className="flex min-h-[620px] items-center px-7 py-10 sm:px-12">
+          <div className="mx-auto w-full max-w-md">
+            <div className="mb-8 flex items-center gap-3 lg:hidden">
+              <img
+                src={CLUB_LOGO_URL}
+                alt="Nairobi Club"
+                className="h-14 w-14 object-contain"
+              />
 
-            <div>
-              <p className="font-semibold text-[#17365F]">
-                Nairobi Club
-              </p>
-              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#86682D]">
-                Committee Register
-              </p>
-            </div>
-          </div>
+              <div>
+                <p className="font-semibold text-[#0B1F3A]">
+                  Nairobi Club
+                </p>
 
-          <div className="max-w-[390px]">
-            <div className="flex h-9 w-9 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-500">
-              <LockIcon />
+                <p className="text-xs font-semibold uppercase tracking-[0.15em] text-[#86682D]">
+                  Governance Portal
+                </p>
+              </div>
             </div>
 
-            <p className="mt-6 text-[12px] font-semibold uppercase tracking-[0.16em] text-[#355079]">
-              Staff Sign-In
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#86682D]">
+              Secure access
             </p>
 
-            <h2 className="mt-3 text-[28px] font-semibold tracking-[-0.025em] text-[#07172A]">
-              {step === "credentials"
-                ? "Sign in to continue"
-                : "Verify your sign-in"}
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight text-[#07172A]">
+              {heading}
             </h2>
 
-            <p className="mt-3 text-[14px] leading-6 text-slate-600">
-              {step === "credentials"
-                ? "Use your Nairobi Club credentials to access the Committee Register."
-                : "Enter the verification code sent to your Nairobi Club email address."}
+            <p className="mt-3 text-sm leading-6 text-slate-600">
+              {description}
             </p>
-          </div>
 
-          {step === "credentials" ? (
-            <form
-              onSubmit={handleLogin}
-              className="mt-8 max-w-[390px] space-y-6"
-            >
-              <div>
-                <label
-                  htmlFor="email"
-                  className="mb-2 block text-[13px] font-semibold text-[#172033]"
-                >
-                  Email
-                </label>
-
-                <input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) =>
-                    setEmail(
-                      event.target.value,
-                    )
-                  }
-                  required
-                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/15"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="password"
-                  className="mb-2 block text-[13px] font-semibold text-[#172033]"
-                >
-                  Password
-                </label>
-
-                <input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) =>
-                    setPassword(
-                      event.target.value,
-                    )
-                  }
-                  required
-                  className="h-11 w-full rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/15"
-                />
-              </div>
-
-              {errorMessage && (
-                <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-700">
-                  {errorMessage}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={busy}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0B2A50] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#143D6B] disabled:cursor-not-allowed disabled:opacity-50"
+            {step === "credentials" && (
+              <form
+                onSubmit={handleLogin}
+                className="mt-8 space-y-5"
               >
-                <span>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-800">
+                    Email
+                  </span>
+
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) =>
+                      setEmail(
+                        event.target.value,
+                      )
+                    }
+                    required
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3.5 text-sm outline-none focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+                  />
+                </label>
+
+                <PasswordField
+                  id="login-password"
+                  label="Password"
+                  value={password}
+                  onChange={setPassword}
+                  autoComplete="current-password"
+                />
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      clearFeedback();
+                      setStep(
+                        "forgot-email",
+                      );
+                    }}
+                    className="text-sm font-semibold text-[#17365F] hover:text-[#0B2A50]"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] px-4 text-sm font-semibold text-white transition hover:bg-[#143D6B] disabled:opacity-50"
+                >
                   {busy
                     ? "Signing in..."
                     : "Sign in"}
-                </span>
+                </button>
+              </form>
+            )}
 
-                {!busy && (
-                  <ArrowIcon />
-                )}
-              </button>
-            </form>
-          ) : (
-            <form
-              onSubmit={handleVerify}
-              className="mt-8 max-w-[390px] space-y-5"
-            >
-              <div>
-                <label
-                  htmlFor="otp"
-                  className="mb-2 block text-[13px] font-semibold text-[#172033]"
-                >
-                  Verification code
+            {step === "otp" && (
+              <form
+                onSubmit={handleVerify}
+                className="mt-8 space-y-5"
+              >
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-800">
+                    Verification code
+                  </span>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    pattern="\d{6}"
+                    value={otp}
+                    onChange={(event) =>
+                      setOtp(
+                        event.target.value.replace(
+                          /\D/g,
+                          "",
+                        ),
+                      )
+                    }
+                    required
+                    className="h-14 w-full rounded-lg border border-slate-300 px-3 text-center text-2xl font-semibold tracking-[0.35em] text-[#0B2A50] outline-none focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+                  />
                 </label>
 
-                <input
-                  id="otp"
-                  type="text"
-                  inputMode="numeric"
-                  autoComplete="one-time-code"
-                  maxLength={6}
-                  pattern="\d{6}"
-                  value={otp}
-                  onChange={(event) =>
-                    setOtp(
-                      event.target.value.replace(
-                        /\D/g,
-                        "",
-                      ),
-                    )
-                  }
-                  required
-                  className="h-14 w-full rounded-md border border-slate-300 bg-white px-3 text-center text-2xl font-semibold tracking-[0.32em] text-[#0B2A50] outline-none transition focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/15"
+                <p className="text-xs leading-5 text-slate-500">
+                  The code expires after 10 minutes.
+                </p>
+
+                <Feedback
+                  message={message}
+                  error={errorMessage}
                 />
 
-                <p className="mt-2 text-xs leading-5 text-slate-500">
-                  The 6-digit code expires after
-                  10 minutes.
-                </p>
-              </div>
-
-              {message && (
-                <p className="rounded-md border border-[#E4D2A9] bg-[#FAF6EC] px-3 py-2.5 text-sm leading-5 text-[#654E1D]">
-                  {message}
-                </p>
-              )}
-
-              {errorMessage && (
-                <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2.5 text-sm leading-5 text-red-700">
-                  {errorMessage}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={
-                  busy ||
-                  otp.length !== 6
-                }
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-md bg-[#0B2A50] px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-[#143D6B] disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <span>
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    otp.length !== 6
+                  }
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white disabled:opacity-50"
+                >
                   {busy
                     ? "Verifying..."
                     : "Verify and sign in"}
-                </span>
+                </button>
 
-                {!busy && (
-                  <ArrowIcon />
-                )}
-              </button>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() =>
+                    void handleLoginResend()
+                  }
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white text-sm font-semibold text-[#17365F] disabled:opacity-50"
+                >
+                  Resend code
+                </button>
 
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void handleResend()
-                }
-                className="h-11 w-full rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-[#17365F] transition hover:bg-slate-50 disabled:opacity-50"
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={goToSignIn}
+                  className="w-full text-sm font-medium text-slate-500"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            )}
+
+            {step === "forgot-email" && (
+              <form
+                onSubmit={handleForgotRequest}
+                className="mt-8 space-y-5"
               >
-                Resend code
-              </button>
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-800">
+                    Registered email address
+                  </span>
 
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => {
-                  setStep(
-                    "credentials",
-                  );
-                  setOtp("");
-                  setChallengeId(
-                    null,
-                  );
-                  setMessage("");
-                  setErrorMessage(
-                    "",
-                  );
-                }}
-                className="w-full text-sm font-medium text-slate-500 hover:text-[#17365F]"
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    value={email}
+                    onChange={(event) =>
+                      setEmail(
+                        event.target.value,
+                      )
+                    }
+                    required
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3.5 text-sm outline-none focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+                  />
+                </label>
+
+                <p className="text-xs leading-5 text-slate-500">
+                  If you have never completed your first-time account setup, use your invitation email or ask an Administrator to resend the invitation instead.
+                </p>
+
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {busy
+                    ? "Sending code..."
+                    : "Send reset code"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={goToSignIn}
+                  className="w-full text-sm font-medium text-slate-500"
+                >
+                  Back to sign in
+                </button>
+              </form>
+            )}
+
+            {step === "forgot-reset" && (
+              <form
+                onSubmit={handlePasswordReset}
+                className="mt-8 space-y-5"
               >
-                Back to sign in
-              </button>
-            </form>
-          )}
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.1em] text-slate-500">
+                    Reset account
+                  </p>
 
-          <div className="mt-8 max-w-[390px] border-t border-slate-200 pt-5">
-            <div className="flex items-start gap-2.5 text-slate-500">
-              <div className="mt-0.5 text-slate-400">
-                <ShieldIcon />
+                  <p className="mt-1 text-sm font-medium text-slate-800">
+                    {email}
+                  </p>
+                </div>
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-800">
+                    6-digit reset code
+                  </span>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                    pattern="\d{6}"
+                    value={otp}
+                    onChange={(event) =>
+                      setOtp(
+                        event.target.value.replace(
+                          /\D/g,
+                          "",
+                        ),
+                      )
+                    }
+                    required
+                    className="h-14 w-full rounded-lg border border-slate-300 px-3 text-center text-2xl font-semibold tracking-[0.35em] text-[#0B2A50] outline-none focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+                  />
+
+                  <span className="mt-2 block text-xs text-slate-500">
+                    This code expires after 10 minutes.
+                  </span>
+                </label>
+
+                <PasswordField
+                  id="new-password"
+                  label="New password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                  hint="At least 12 characters with uppercase, lowercase, a number and a special character."
+                />
+
+                <PasswordField
+                  id="confirm-new-password"
+                  label="Confirm new password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                />
+
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    otp.length !== 6
+                  }
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {busy
+                    ? "Resetting password..."
+                    : "Reset password"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    resendSeconds > 0
+                  }
+                  onClick={() =>
+                    void handleResetResend()
+                  }
+                  className="h-11 w-full rounded-lg border border-slate-300 bg-white text-sm font-semibold text-[#17365F] disabled:opacity-50"
+                >
+                  {resendSeconds > 0
+                    ? `Resend code in ${resendSeconds}s`
+                    : "Resend reset code"}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    clearFeedback();
+                    setStep(
+                      "forgot-email",
+                    );
+                  }}
+                  className="w-full text-sm font-medium text-slate-500"
+                >
+                  Use a different email
+                </button>
+              </form>
+            )}
+
+            {step === "forgot-complete" && (
+              <div className="mt-8 space-y-5">
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="button"
+                  onClick={goToSignIn}
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white"
+                >
+                  Continue to sign in
+                </button>
               </div>
+            )}
 
-              <p className="text-[11px] leading-5">
-                Authorised Nairobi Club users
-                only. Access to this system is
-                logged for security and
-                governance purposes.
+            {step === "invite" && (
+              <form
+                onSubmit={handleInvitation}
+                className="mt-8 space-y-5"
+              >
+                {!invitationToken && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                    This invitation link is missing its security token. Ask an Administrator to resend your invitation.
+                  </div>
+                )}
+
+                <label className="block">
+                  <span className="mb-2 block text-sm font-semibold text-slate-800">
+                    Full name
+                  </span>
+
+                  <input
+                    type="text"
+                    autoComplete="name"
+                    maxLength={120}
+                    value={inviteName}
+                    onChange={(event) =>
+                      setInviteName(
+                        event.target.value,
+                      )
+                    }
+                    required
+                    className="h-11 w-full rounded-lg border border-slate-300 px-3.5 text-sm outline-none focus:border-[#C8A45D] focus:ring-2 focus:ring-[#C8A45D]/20"
+                  />
+                </label>
+
+                <PasswordField
+                  id="invite-password"
+                  label="Create your password"
+                  value={newPassword}
+                  onChange={setNewPassword}
+                  autoComplete="new-password"
+                  hint="At least 12 characters with uppercase, lowercase, a number and a special character."
+                />
+
+                <PasswordField
+                  id="invite-confirm-password"
+                  label="Confirm password"
+                  value={confirmPassword}
+                  onChange={setConfirmPassword}
+                  autoComplete="new-password"
+                />
+
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    !invitationToken
+                  }
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {busy
+                    ? "Creating account..."
+                    : "Complete account setup"}
+                </button>
+              </form>
+            )}
+
+            {step === "invite-complete" && (
+              <div className="mt-8 space-y-5">
+                <Feedback
+                  message={message}
+                  error={errorMessage}
+                />
+
+                <button
+                  type="button"
+                  onClick={goToSignIn}
+                  className="h-11 w-full rounded-lg bg-[#0B2A50] text-sm font-semibold text-white"
+                >
+                  Continue to sign in
+                </button>
+              </div>
+            )}
+
+            <div className="mt-8 border-t border-slate-200 pt-5">
+              <p className="text-xs leading-5 text-slate-500">
+                Never share your password or verification codes. Nairobi Club administrators do not need to know your password.
               </p>
             </div>
-
-            <p className="mt-7 text-[11px] text-[#526887]">
-              Nairobi Club · Committee Register
-            </p>
           </div>
         </div>
       </section>
