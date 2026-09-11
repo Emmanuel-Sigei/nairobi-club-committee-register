@@ -10,7 +10,7 @@
       "destination": "/api/committees"
     },
     {
-      "source": "/api/documents/:ncId/access",
+      "source": "/api/documents/:ncId/:ncRoute",
       "destination": "/api/documents"
     },
     {
