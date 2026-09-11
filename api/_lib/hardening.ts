@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { getDb } from "./db";
-import { getClientIp } from "./http";
+import { getDb } from "./db.js";
+import { getClientIp } from "./http.js";
 
 function positiveInteger(
   value: string | undefined,

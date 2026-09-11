@@ -1,4 +1,4 @@
-import type { AuthContext } from "./auth";
+import type { AuthContext } from "./auth.js";
 
 export function canViewGovernance(
   context: AuthContext,

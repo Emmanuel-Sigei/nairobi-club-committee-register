@@ -1,6 +1,6 @@
-import { getDb } from "./db";
-import { getClientIp, getUserAgent } from "./http";
-import type { AuthContext } from "./auth";
+import { getDb } from "./db.js";
+import { getClientIp, getUserAgent } from "./http.js";
+import type { AuthContext } from "./auth.js";
 
 export async function writeAuditEvent(input: {
   request: Request;

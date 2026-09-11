@@ -1,9 +1,9 @@
-import detail from "./notifications/_[id]";
-import index from "./notifications/_index";
+import detail from "./notifications/_[id].js";
+import index from "./notifications/_index.js";
 import {
   forwardRequest,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

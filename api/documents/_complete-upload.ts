@@ -1,13 +1,13 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { writeAuditEvent } from "../_lib/audit";
-import { getDb } from "../_lib/db";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { writeAuditEvent } from "../_lib/audit.js";
+import { getDb } from "../_lib/db.js";
 import {
   createDocumentVersion,
-} from "../_lib/document-version";
+} from "../_lib/document-version.js";
 import {
   isZohoMailConfigured,
   sendDocumentAddedNotification,
-} from "../_lib/email";
+} from "../_lib/email.js";
 import {
   documentScopeKey,
   inferDocumentContentType,
@@ -17,17 +17,17 @@ import {
   parseDocumentSize,
   requiredDocumentString,
 
-} from "../_lib/document-utils";
+} from "../_lib/document-utils.js";
 import {
   deleteR2Object,
   headR2Object,
   isR2Configured,
-} from "../_lib/r2";
+} from "../_lib/r2.js";
 import {
   error,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 
 interface CompleteUploadBody {
   committeeId?: unknown;

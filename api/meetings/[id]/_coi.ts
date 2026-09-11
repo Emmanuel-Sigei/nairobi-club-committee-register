@@ -1,15 +1,15 @@
-import { getAuthenticatedUser } from "../../_lib/auth";
-import { writeAuditEvent } from "../../_lib/audit";
+import { getAuthenticatedUser } from "../../_lib/auth.js";
+import { writeAuditEvent } from "../../_lib/audit.js";
 import {
   currentAttendanceStatus,
-} from "../../_lib/attendance-current";
-import { getDb } from "../../_lib/db";
+} from "../../_lib/attendance-current.js";
+import { getDb } from "../../_lib/db.js";
 import {
   isZohoMailConfigured,
   sendCoiCorrectionNotification,
-} from "../../_lib/email";
-import { error, json, readJson } from "../../_lib/http";
-import { canViewCommittee } from "../../_lib/permissions";
+} from "../../_lib/email.js";
+import { error, json, readJson } from "../../_lib/http.js";
+import { canViewCommittee } from "../../_lib/permissions.js";
 
 type COIStatus =
   | "NO_CONFLICT"

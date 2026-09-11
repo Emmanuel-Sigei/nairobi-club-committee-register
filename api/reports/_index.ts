@@ -1,18 +1,18 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { getDb } from "../_lib/db";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { getDb } from "../_lib/db.js";
 import {
   currentAttendanceMarkedAt,
   currentAttendanceReason,
   currentAttendanceSource,
   currentAttendanceStatus,
-} from "../_lib/attendance-current";
+} from "../_lib/attendance-current.js";
 import {
   canViewGovernance,
-} from "../_lib/governance";
+} from "../_lib/governance.js";
 import {
   error,
   json,
-} from "../_lib/http";
+} from "../_lib/http.js";
 
 type ReportType =
   | "attendance"

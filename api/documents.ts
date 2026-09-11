@@ -1,12 +1,12 @@
-import access from "./documents/[id]/_access";
-import completeUpload from "./documents/_complete-upload";
-import index from "./documents/_index";
-import uploadUrl from "./documents/_upload-url";
+import access from "./documents/[id]/_access.js";
+import completeUpload from "./documents/_complete-upload.js";
+import index from "./documents/_index.js";
+import uploadUrl from "./documents/_upload-url.js";
 import {
   forwardRequest,
   routingError,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

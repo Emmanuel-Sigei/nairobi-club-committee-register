@@ -1,14 +1,14 @@
 import {
   getAuthenticatedUser,
-} from "../_lib/auth";
+} from "../_lib/auth.js";
 import {
   getDb,
-} from "../_lib/db";
+} from "../_lib/db.js";
 import {
   error,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 
 interface NotificationAction {
   action?: unknown;

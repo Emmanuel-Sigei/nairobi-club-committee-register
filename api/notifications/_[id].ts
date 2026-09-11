@@ -1,13 +1,13 @@
 import {
   getAuthenticatedUser,
-} from "../_lib/auth";
+} from "../_lib/auth.js";
 import {
   getDb,
-} from "../_lib/db";
+} from "../_lib/db.js";
 import {
   error,
   json,
-} from "../_lib/http";
+} from "../_lib/http.js";
 
 function idFromRequest(
   request: Request,

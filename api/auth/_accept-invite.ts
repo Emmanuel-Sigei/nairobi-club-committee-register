@@ -1,16 +1,16 @@
-import { getDb } from "../_lib/db";
+import { getDb } from "../_lib/db.js";
 import {
   error,
   getClientIp,
   getUserAgent,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 import {
   hashPassword,
   hashToken,
   isStrongPassword,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 interface AcceptInviteBody {
   token?: unknown;

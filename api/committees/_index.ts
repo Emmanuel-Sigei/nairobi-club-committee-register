@@ -2,20 +2,20 @@ import {
   CalendarNotConfiguredError,
   createCommitteeCalendar,
   deleteCommitteeCalendar,
-} from "../_lib/calendar";
+} from "../_lib/calendar.js";
 import {
   getAuthenticatedUser,
-} from "../_lib/auth";
+} from "../_lib/auth.js";
 import {
   getDb,
-} from "../_lib/db";
+} from "../_lib/db.js";
 import {
   error,
   getClientIp,
   getUserAgent,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 
 type CommitteeType =
   | "MAIN"

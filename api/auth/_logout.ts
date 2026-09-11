@@ -1,13 +1,13 @@
-import { getDb } from "../_lib/db";
-import { getSessionToken } from "../_lib/auth";
+import { getDb } from "../_lib/db.js";
+import { getSessionToken } from "../_lib/auth.js";
 import {
   clearCookie,
   error,
   getClientIp,
   getUserAgent,
   json,
-} from "../_lib/http";
-import { hashToken } from "../_lib/security";
+} from "../_lib/http.js";
+import { hashToken } from "../_lib/security.js";
 
 export default async function handler(
   request: Request,

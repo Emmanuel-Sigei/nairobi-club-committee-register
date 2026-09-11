@@ -1,12 +1,12 @@
-import { getAuthenticatedUser } from "../../_lib/auth";
-import { writeAuditEvent } from "../../_lib/audit";
-import { canAccessDocumentScope } from "../../_lib/document-access";
-import { getDb } from "../../_lib/db";
-import { error, json, readJson } from "../../_lib/http";
+import { getAuthenticatedUser } from "../../_lib/auth.js";
+import { writeAuditEvent } from "../../_lib/audit.js";
+import { canAccessDocumentScope } from "../../_lib/document-access.js";
+import { getDb } from "../../_lib/db.js";
+import { error, json, readJson } from "../../_lib/http.js";
 import {
   createSignedDocumentUrl,
   isR2Configured,
-} from "../../_lib/r2";
+} from "../../_lib/r2.js";
 
 interface AccessBody {
   mode?: unknown;

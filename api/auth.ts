@@ -1,18 +1,18 @@
-import acceptInvite from "./auth/_accept-invite";
-import invite from "./auth/_invite";
-import login from "./auth/_login";
-import logout from "./auth/_logout";
-import me from "./auth/_me";
-import requestReset from "./auth/_request-reset";
-import resendInvite from "./auth/_resend-invite";
-import resendOtp from "./auth/_resend-otp";
-import resetPassword from "./auth/_reset-password";
-import verifyOtp from "./auth/_verify-otp";
+import acceptInvite from "./auth/_accept-invite.js";
+import invite from "./auth/_invite.js";
+import login from "./auth/_login.js";
+import logout from "./auth/_logout.js";
+import me from "./auth/_me.js";
+import requestReset from "./auth/_request-reset.js";
+import resendInvite from "./auth/_resend-invite.js";
+import resendOtp from "./auth/_resend-otp.js";
+import resetPassword from "./auth/_reset-password.js";
+import verifyOtp from "./auth/_verify-otp.js";
 import {
   forwardRequest,
   routingError,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

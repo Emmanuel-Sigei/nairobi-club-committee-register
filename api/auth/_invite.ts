@@ -1,25 +1,25 @@
 import {
   getAuthenticatedUser,
   hasRole,
-} from "../_lib/auth";
-import { getDb } from "../_lib/db";
+} from "../_lib/auth.js";
+import { getDb } from "../_lib/db.js";
 import {
   assertZohoMailConfigured,
   sendInvitationEmail,
-} from "../_lib/email";
+} from "../_lib/email.js";
 import {
   error,
   getClientIp,
   getUserAgent,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 import {
   generateToken,
   hashToken,
   isValidEmail,
   normalizeEmail,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 interface MembershipInput {
   committeeId?: unknown;

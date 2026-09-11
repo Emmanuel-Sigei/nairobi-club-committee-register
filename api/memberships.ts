@@ -1,9 +1,9 @@
-import detail from "./memberships/_[id]";
-import index from "./memberships/_index";
+import detail from "./memberships/_[id].js";
+import index from "./memberships/_index.js";
 import {
   forwardRequest,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

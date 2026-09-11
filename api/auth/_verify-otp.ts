@@ -1,8 +1,8 @@
-import { getDb } from "../_lib/db";
+import { getDb } from "../_lib/db.js";
 import {
   enforceIpRateLimit,
   isTrustedMutationOrigin,
-} from "../_lib/hardening";
+} from "../_lib/hardening.js";
 import {
   error,
   getClientIp,
@@ -10,12 +10,12 @@ import {
   json,
   readJson,
   setCookie,
-} from "../_lib/http";
+} from "../_lib/http.js";
 import {
   generateToken,
   hashToken,
   verifyOtp,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 interface VerifyBody {
   challengeId?: unknown;

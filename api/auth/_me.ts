@@ -1,5 +1,5 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { error, json } from "../_lib/http";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { error, json } from "../_lib/http.js";
 
 export default async function handler(
   request: Request,

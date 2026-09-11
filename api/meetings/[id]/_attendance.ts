@@ -1,19 +1,19 @@
-import { getAuthenticatedUser } from "../../_lib/auth";
-import { writeAuditEvent } from "../../_lib/audit";
+import { getAuthenticatedUser } from "../../_lib/auth.js";
+import { writeAuditEvent } from "../../_lib/audit.js";
 import {
   currentAttendanceReason,
   currentAttendanceSource,
   currentAttendanceStatus,
-} from "../../_lib/attendance-current";
-import { CalendarNotConfiguredError, getCalendarEventSnapshot } from "../../_lib/calendar";
-import { getDb } from "../../_lib/db";
-import { error, json, readJson } from "../../_lib/http";
-import { canViewCommittee } from "../../_lib/permissions";
+} from "../../_lib/attendance-current.js";
+import { CalendarNotConfiguredError, getCalendarEventSnapshot } from "../../_lib/calendar.js";
+import { getDb } from "../../_lib/db.js";
+import { error, json, readJson } from "../../_lib/http.js";
+import { canViewCommittee } from "../../_lib/permissions.js";
 import {
   isZohoMailConfigured,
   sendApologyConfirmation,
   sendAttendanceCorrectionNotification,
-} from "../../_lib/email";
+} from "../../_lib/email.js";
 
 const SYNC_STALE_MS = 5 * 60 * 1000;
 type Action = "check-in" | "apology" | "mark" | "confirm-draft" | "reject-draft" | "sync" | "close";

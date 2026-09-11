@@ -1,24 +1,24 @@
-import { getDb } from "../_lib/db";
+import { getDb } from "../_lib/db.js";
 import {
   sendLoginOtp,
-} from "../_lib/email";
+} from "../_lib/email.js";
 import {
   consumeRateLimit,
   enforceIpRateLimit,
   isTrustedMutationOrigin,
   securityKey,
-} from "../_lib/hardening";
+} from "../_lib/hardening.js";
 import {
   error,
   getClientIp,
   getUserAgent,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 import {
   generateOtp,
   hashOtp,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 interface ResendBody {
   challengeId?: unknown;

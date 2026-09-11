@@ -1,22 +1,22 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { writeAuditEvent } from "../_lib/audit";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { writeAuditEvent } from "../_lib/audit.js";
 import {
   CalendarNotConfiguredError,
   deleteCalendarEvent,
   getCalendarEventSnapshot,
   restoreCalendarEvent,
   updateCalendarEvent,
-} from "../_lib/calendar";
-import { getDb } from "../_lib/db";
-import { error, json, readJson } from "../_lib/http";
+} from "../_lib/calendar.js";
+import { getDb } from "../_lib/db.js";
+import { error, json, readJson } from "../_lib/http.js";
 import {
   isZohoMailConfigured,
   sendMeetingNotification,
-} from "../_lib/email";
+} from "../_lib/email.js";
 import {
   createMeetingInAppNotifications,
-} from "../_lib/notifications";
-import { canViewCommittee } from "../_lib/permissions";
+} from "../_lib/notifications.js";
+import { canViewCommittee } from "../_lib/permissions.js";
 
 interface MeetingInput {
   title?: unknown;

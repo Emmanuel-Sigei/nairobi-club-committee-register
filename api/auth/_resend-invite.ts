@@ -1,24 +1,24 @@
 import {
   getAuthenticatedUser,
-} from "../_lib/auth";
+} from "../_lib/auth.js";
 import {
   getDb,
-} from "../_lib/db";
+} from "../_lib/db.js";
 import {
   assertZohoMailConfigured,
   sendInvitationEmail,
-} from "../_lib/email";
+} from "../_lib/email.js";
 import {
   error,
   getClientIp,
   getUserAgent,
   json,
   readJson,
-} from "../_lib/http";
+} from "../_lib/http.js";
 import {
   generateToken,
   hashToken,
-} from "../_lib/security";
+} from "../_lib/security.js";
 
 interface ResendInviteBody {
   userId?: unknown;

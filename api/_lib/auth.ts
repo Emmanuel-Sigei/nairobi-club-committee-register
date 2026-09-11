@@ -1,10 +1,10 @@
-import { getDb } from "./db";
+import { getDb } from "./db.js";
 import {
   isTrustedMutationOrigin,
   SESSION_IDLE_MINUTES,
   SESSION_TOUCH_MINUTES,
-} from "./hardening";
-import { hashToken } from "./security";
+} from "./hardening.js";
+import { hashToken } from "./security.js";
 
 export const SESSION_COOKIE =
   "nairobi_club_session";

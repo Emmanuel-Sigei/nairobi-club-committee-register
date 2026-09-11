@@ -1,5 +1,5 @@
-import type { AuthContext } from "./auth";
-import { getDb } from "./db";
+import type { AuthContext } from "./auth.js";
+import { getDb } from "./db.js";
 
 export async function canAccessDocumentScope(
   context: AuthContext,

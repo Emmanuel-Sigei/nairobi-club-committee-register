@@ -1,7 +1,7 @@
 import {
   getZohoAccessToken,
   isZohoServiceConfigured,
-} from "./zoho-oauth";
+} from "./zoho-oauth.js";
 
 export interface CalendarAttendee {
   email: string;

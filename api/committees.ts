@@ -1,9 +1,9 @@
-import detail from "./committees/_[id]";
-import index from "./committees/_index";
+import detail from "./committees/_[id].js";
+import index from "./committees/_index.js";
 import {
   forwardRequest,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

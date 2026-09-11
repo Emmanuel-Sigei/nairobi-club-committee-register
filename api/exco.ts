@@ -1,9 +1,9 @@
-import dashboard from "./exco/_dashboard";
+import dashboard from "./exco/_dashboard.js";
 import {
   forwardRequest,
   routingError,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

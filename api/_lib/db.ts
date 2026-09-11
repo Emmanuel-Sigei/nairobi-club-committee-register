@@ -1,5 +1,5 @@
 import { PrismaNeon } from "@prisma/adapter-neon";
-import { PrismaClient } from "../../src/generated/prisma/client";
+import { PrismaClient } from "../../src/generated/prisma/client.js";
 
 let prisma: PrismaClient | undefined;
 

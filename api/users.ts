@@ -1,10 +1,10 @@
-import deactivate from "./users/[id]/_deactivate";
-import index from "./users/_index";
+import deactivate from "./users/[id]/_deactivate.js";
+import index from "./users/_index.js";
 import {
   forwardRequest,
   routingError,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

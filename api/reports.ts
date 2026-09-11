@@ -1,4 +1,4 @@
-import reports from "./reports/_index";
+import reports from "./reports/_index.js";
 
 export default async function handler(
   request: Request,

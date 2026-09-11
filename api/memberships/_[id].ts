@@ -1,7 +1,7 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { writeAuditEvent } from "../_lib/audit";
-import { getDb } from "../_lib/db";
-import { error, json, readJson } from "../_lib/http";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { writeAuditEvent } from "../_lib/audit.js";
+import { getDb } from "../_lib/db.js";
+import { error, json, readJson } from "../_lib/http.js";
 
 type MembershipRole = "CHAIR" | "SECRETARY" | "MEMBER";
 

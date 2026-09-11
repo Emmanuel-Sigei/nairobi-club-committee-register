@@ -1,12 +1,12 @@
-import detail from "./meetings/_[id]";
-import attendance from "./meetings/[id]/_attendance";
-import coi from "./meetings/[id]/_coi";
-import index from "./meetings/_index";
+import detail from "./meetings/_[id].js";
+import attendance from "./meetings/[id]/_attendance.js";
+import coi from "./meetings/[id]/_coi.js";
+import index from "./meetings/_index.js";
 import {
   forwardRequest,
   routingError,
   routingParameter,
-} from "./_lib/function-forward";
+} from "./_lib/function-forward.js";
 
 export default async function handler(
   request: Request,

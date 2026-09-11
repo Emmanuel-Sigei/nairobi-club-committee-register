@@ -1,5 +1,5 @@
-import { getDb } from "./db";
-import type { AuthContext } from "./auth";
+import { getDb } from "./db.js";
+import type { AuthContext } from "./auth.js";
 
 export async function canManageCommittee(
   context: AuthContext,

@@ -1,7 +1,7 @@
-import { getAuthenticatedUser } from "../_lib/auth";
-import { canAccessDocumentScope } from "../_lib/document-access";
-import { getDb } from "../_lib/db";
-import { error, json } from "../_lib/http";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { canAccessDocumentScope } from "../_lib/document-access.js";
+import { getDb } from "../_lib/db.js";
+import { error, json } from "../_lib/http.js";
 
 export default async function handler(
   request: Request,

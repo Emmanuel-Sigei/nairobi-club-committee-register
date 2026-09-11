@@ -1,20 +1,20 @@
 import {
   getAuthenticatedUser,
-} from "../../_lib/auth";
+} from "../../_lib/auth.js";
 import {
   writeAuditEvent,
-} from "../../_lib/audit";
+} from "../../_lib/audit.js";
 import {
   isCalendarConfigured,
   updateCalendarEvent,
-} from "../../_lib/calendar";
+} from "../../_lib/calendar.js";
 import {
   getDb,
-} from "../../_lib/db";
+} from "../../_lib/db.js";
 import {
   error,
   json,
-} from "../../_lib/http";
+} from "../../_lib/http.js";
 
 function idFromRequest(
   request: Request,

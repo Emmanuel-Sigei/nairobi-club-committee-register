@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { getAuthenticatedUser } from "../_lib/auth";
-import { getDb } from "../_lib/db";
-import { error, json, readJson } from "../_lib/http";
+import { getAuthenticatedUser } from "../_lib/auth.js";
+import { getDb } from "../_lib/db.js";
+import { error, json, readJson } from "../_lib/http.js";
 import {
   inferDocumentContentType,
   normalizeDocumentTitle,
@@ -10,11 +10,11 @@ import {
   requiredDocumentString,
   safeObjectFileName,
 
-} from "../_lib/document-utils";
+} from "../_lib/document-utils.js";
 import {
   createSignedUploadUrl,
   isR2Configured,
-} from "../_lib/r2";
+} from "../_lib/r2.js";
 
 interface UploadUrlBody {
   committeeId?: unknown;

@@ -1,6 +1,6 @@
 import {
   getDb,
-} from "./db";
+} from "./db.js";
 
 export type MeetingInAppNotificationType =
   | "scheduled"
