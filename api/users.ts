@@ -25,8 +25,15 @@ export default async function handler(
     !id &&
     !route
   ) {
+    const forwarded =
+      await forwardRequest(
+        request,
+        "/api/users",
+        [],
+      );
+
     return index(
-      request,
+      forwarded,
     );
   }
 

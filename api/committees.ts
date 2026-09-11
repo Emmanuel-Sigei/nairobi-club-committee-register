@@ -15,8 +15,15 @@ export default async function handler(
     );
 
   if (!id) {
+    const forwarded =
+      await forwardRequest(
+        request,
+        "/api/committees",
+        [],
+      );
+
     return index(
-      request,
+      forwarded,
     );
   }
 

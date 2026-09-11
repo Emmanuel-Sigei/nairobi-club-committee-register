@@ -23,9 +23,19 @@ export default async function handler(
       "ncId",
     );
 
-  if (!route && !id) {
+  if (
+    !route &&
+    !id
+  ) {
+    const forwarded =
+      await forwardRequest(
+        request,
+        "/api/documents",
+        [],
+      );
+
     return index(
-      request,
+      forwarded,
     );
   }
 

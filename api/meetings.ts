@@ -27,8 +27,15 @@ export default async function handler(
     !id &&
     !route
   ) {
+    const forwarded =
+      await forwardRequest(
+        request,
+        "/api/meetings",
+        [],
+      );
+
     return index(
-      request,
+      forwarded,
     );
   }
 

@@ -1,10 +1,73 @@
+function requestBaseUrl(
+  request: Request,
+): string {
+  const configured =
+    process.env.APP_URL
+      ?.trim();
+
+  if (configured) {
+    try {
+      return new URL(
+        configured,
+      ).origin;
+    } catch {
+      // Fall through to forwarded request headers.
+    }
+  }
+
+  const forwardedProto =
+    request.headers
+      .get(
+        "x-forwarded-proto",
+      )
+      ?.split(",")[0]
+      ?.trim();
+
+  const forwardedHost =
+    request.headers
+      .get(
+        "x-forwarded-host",
+      )
+      ?.split(",")[0]
+      ?.trim();
+
+  const host =
+    forwardedHost ||
+    request.headers
+      .get("host")
+      ?.trim();
+
+  if (host) {
+    return `${forwardedProto || "https"}://${host}`;
+  }
+
+  return "http://localhost";
+}
+
+export function resolvedRequestUrl(
+  request: Request,
+): URL {
+  try {
+    return new URL(
+      request.url,
+    );
+  } catch {
+    return new URL(
+      request.url,
+      requestBaseUrl(
+        request,
+      ),
+    );
+  }
+}
+
 export function routingParameter(
   request: Request,
   name: string,
 ): string {
   return (
-    new URL(
-      request.url,
+    resolvedRequestUrl(
+      request,
     ).searchParams
       .get(name)
       ?.trim() ?? ""
@@ -38,8 +101,8 @@ export async function forwardRequest(
   internalParameters: string[],
 ): Promise<Request> {
   const url =
-    new URL(
-      request.url,
+    resolvedRequestUrl(
+      request,
     );
 
   url.pathname =
